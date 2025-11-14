@@ -1,0 +1,46 @@
+{
+  "name": "evolution-api-mcp-server",
+  "version": "2.0.0",
+  "description": "MCP Server avançado com IA para análise profunda de mensagens do Evolution API",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "evolution-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "watch": "tsx watch src/index.ts"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "evolution-api",
+    "whatsapp",
+    "database",
+    "postgresql",
+    "ai",
+    "analytics",
+    "sentiment-analysis"
+  ],
+  "author": "Evolution API",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "pg": "^8.13.1",
+    "dotenv": "^16.4.7",
+    "redis": "^4.7.0",
+    "node-cache": "^5.1.2",
+    "dayjs": "^1.11.13",
+    "natural": "^8.0.1",
+    "sentiment": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "@types/pg": "^8.11.10",
+    "@types/natural": "^5.1.5",
+    "tsx": "^4.20.5",
+    "typescript": "^5.7.2"
+  }
+}

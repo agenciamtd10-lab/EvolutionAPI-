@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "evolution-api": {
+      "command": "node",
+      "args": [
+        "/CAMINHO/COMPLETO/PARA/evolution-api/mcp-server/dist/index.js"
+      ],
+      "env": {
+        "DATABASE_CONNECTION_URI": "postgresql://usuario:senha@localhost:5432/evolution"
+      }
+    }
+  }
+}
