@@ -82,11 +82,33 @@ export async function GET(request: NextRequest) {
       ? analyzed.reduce((sum: number, item: any) => sum + item.sentiment.score, 0) / analyzed.length
       : 0;
 
+    // Obter paginação dos query params
+    const { searchParams } = req.nextUrl;
+    const pageParam = searchParams.get('page');
+    const pageSizeParam = searchParams.get('pageSize');
+
+    const page = pageParam ? parseInt(pageParam, 10) : 1;
+    const pageSize = pageSizeParam ? parseInt(pageSizeParam, 10) : 100;
+
+    const startIdx = (page - 1) * pageSize;
+    const endIdx = startIdx + pageSize;
+
+    const paginatedMessages = analyzed.slice(startIdx, endIdx);
+    const totalPages = Math.ceil(analyzed.length / pageSize);
+
     return NextResponse.json({
       total: analyzed.length,
       avgScore: avgScore.toFixed(2),
       distribution,
-      messages: analyzed.slice(0, 100), // Retornar apenas as primeiras 100
+      messages: paginatedMessages,
+      pagination: {
+        page,
+        pageSize,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+        note: "A lista de mensagens é paginada. Use os parâmetros 'page' e 'pageSize' na query string para navegar."
+      }
     });
   } catch (error) {
     console.error('Erro ao analisar sentimento:', error);
