@@ -1,0 +1,37 @@
+{
+  "name": "evolution-api-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP Server para análise de mensagens do Evolution API via PostgreSQL",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "evolution-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "watch": "tsx watch src/index.ts"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "evolution-api",
+    "whatsapp",
+    "database",
+    "postgresql"
+  ],
+  "author": "Evolution API",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "pg": "^8.13.1",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.20.5",
+    "typescript": "^5.7.2"
+  }
+}
