@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Instance {
+  id                String    @id @default(uuid()) @db.Uuid
+  name              String    @unique
+  connectionStatus  String?
+  ownerJid          String?
+  profilePictureUrl String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  Message           Message[]
+  Contact           Contact[]
+  Chat              Chat[]
+
+  @@map("Instance")
+}
+
+model Message {
+  id              String    @id @default(uuid()) @db.Uuid
+  key             Json
+  pushName        String?
+  participant     String?
+  message         Json
+  messageType     String
+  messageTimestamp BigInt
+  instanceId      String    @db.Uuid
+  source          String?
+  fromMe          Boolean   @default(false)
+  status          String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  Instance        Instance  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId])
+  @@index([messageTimestamp])
+  @@index([fromMe])
+  @@map("Message")
+}
+
+model Contact {
+  id              String    @id @default(uuid()) @db.Uuid
+  remoteJid       String
+  pushName        String?
+  profilePictureUrl String?
+  instanceId      String    @db.Uuid
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  Instance        Instance  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@unique([instanceId, remoteJid])
+  @@index([instanceId])
+  @@map("Contact")
+}
+
+model Chat {
+  id              String    @id @default(uuid()) @db.Uuid
+  remoteJid       String
+  name            String?
+  unreadMessages  Int       @default(0)
+  lastMessageTime BigInt?
+  instanceId      String    @db.Uuid
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  Instance        Instance  @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@unique([instanceId, remoteJid])
+  @@index([instanceId])
+  @@map("Chat")
+}
