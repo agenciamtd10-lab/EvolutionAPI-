@@ -16,7 +16,7 @@ The goal is to maintain a stable, custom version of Evolution API that fixes spe
 ## Operating Protocol & Guardrails
 
 ### 1. Operating Protocol
-- **Session start**: Read `task.md` for active context. Clarify any questions with the user, do not make assumption. 
+- **Session start**: Read `task.md` for active context. For detailed technical guidance on the codebase, architecture, and commands, refer to `DEVELOPMENT.md`. Clarify any questions with the user, do not make assumption. 
 - **Task completion**: Verify outcomes, request user confirmation, then update documentation. 
 - **Incident response**: Surface blockers, unexpected state, or sandbox limitations immediately. Never undo prior user changes without explicit approval.
 
