@@ -16,9 +16,10 @@ We use a custom `build.sh` script to build and push the Docker image to Azure Co
     ```bash
     IMAGE_TAG=v2.3.2-ww-2
     ```
-3.  Ensure you are on the correct branch:
+3.  Ensure you are on the correct branch (**`production-v2.3.2`**):
     ```bash
-    git rev-parse --abbrev-ref HEAD
+    git checkout production-v2.3.2
+    git pull origin production-v2.3.2
     ```
 
 ### 2. Run Build & Push
