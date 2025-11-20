@@ -1,0 +1,8 @@
+{
+  "name": "Evolution API (production‑v2.3.2)",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "features": {
+    "ghcr.io/devcontainers/features/azure-cli:1": {}
+  },
+  "postCreateCommand": "npm ci && npm run build"
+}
