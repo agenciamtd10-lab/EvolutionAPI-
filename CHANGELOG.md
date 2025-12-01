@@ -1,3 +1,9 @@
+# Unreleased
+
+### Fixed
+
+* [WIDGET-WORKS] Guard `messages.update` cache cleanup with a derived key and optional `MESSAGE_UPDATE_CACHE_DELETE_DISABLED` flag to prevent cache.delete crash-loops.
+
 # 2.3.2 (2025-09-02)
 
 ### Features
