@@ -12,7 +12,8 @@ export class BaileysMessageProcessor {
   private subscription?: Subscription;
 
   protected messageSubject = new Subject<{
-    messages: proto.IWebMessageInfo[];
+    // [WIDGET-WORKS] Accept Baileys WAMessage shape directly to satisfy downstream typing.
+    messages: MessageUpsertPayload['messages'];
     type: MessageUpsertType;
     requestId?: string;
     settings: any;
