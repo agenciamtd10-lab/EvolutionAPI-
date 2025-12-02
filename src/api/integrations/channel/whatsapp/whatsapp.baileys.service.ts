@@ -387,7 +387,8 @@ export class BaileysStartupService extends ChannelStartupService {
 
     if (connection === 'close') {
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
-      const codesToNotReconnect = [DisconnectReason.loggedOut, DisconnectReason.forbidden, 402, 406];
+      // [WIDGET-WORKS] Add 401 to prevent infinite reconnection loop on WhatsApp conflict/replaced errors
+      const codesToNotReconnect = [DisconnectReason.loggedOut, DisconnectReason.forbidden, 401, 402, 406];
       const shouldReconnect = !codesToNotReconnect.includes(statusCode);
       if (shouldReconnect) {
         await this.connectToWhatsapp(this.phoneNumber);
