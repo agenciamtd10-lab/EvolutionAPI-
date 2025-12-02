@@ -1,10 +1,10 @@
-# Unreleased
+# 2.3.2 (2025-09-02)
 
-### Fixed
+### Widget Works Modification
 
+* [WIDGET-WORKS] Fix `PrismaClientValidationError` in `messages.update` (missing `Message` relation) by guarding `messageUpdate.create` calls.
 * [WIDGET-WORKS] Guard `messages.update` cache cleanup with a derived key and optional `MESSAGE_UPDATE_CACHE_DELETE_DISABLED` flag to prevent cache.delete crash-loops.
 
-# 2.3.2 (2025-09-02)
 
 ### Features
 
@@ -803,7 +803,7 @@
 
 * Added messages.delete event
 * Added restart instance endpoint
-* Created automation for creating instances in the chatwoot bot with the command '#inbox_whatsapp:{INSTANCE_NAME}
+* Created automation for creating instances in the chatwoot bot with the command '#inbox_whatsapp:{INSTANCE_NAME}'
 * Change Baileys version to: 6.4.0
 * Send contact in chatwoot
 * Send contact array in chatwoot
@@ -814,7 +814,7 @@
 
 * Fixed error to send message in large groups
 * Docker files adjusted
-* Fixed in the postman collection the webhookByEvent parameter by webhook_by_events
+* Fixed in the postman collection the webhookByEvent parameter by webhook_by__events
 * Added validations in create instance
 * Removed link preview endpoint, now it's done automatically from sending conventional text
 * Added group membership validation before sending message to groups

@@ -151,7 +151,8 @@ import { BaileysMessageProcessor } from './baileysMessage.processor';
 import { useVoiceCallsBaileys } from './voiceCalls/useVoiceCallsBaileys';
 
 // [WIDGET-WORKS] Local helper because isJidUser is absent from current Baileys typings.
-const isJidUser = (jid?: string) => !!jid && jid.includes('@s.whatsapp.net') && !isJidGroup(jid) && !isJidBroadcast(jid);
+const isJidUser = (jid?: string) =>
+  !!jid && jid.includes('@s.whatsapp.net') && !isJidGroup(jid) && !isJidBroadcast(jid);
 // [WIDGET-WORKS] Gracefully access non-typed Baileys senderPn on keys.
 const getSenderPn = (key: WAMessageKey | proto.IMessageKey) => (key as any)?.senderPn;
 
@@ -1478,9 +1479,16 @@ export class BaileysStartupService extends ChannelStartupService {
             if (update.message === null && update.status === undefined) {
               this.sendDataWebhook(Events.MESSAGES_DELETE, key);
 
-              if (this.configService.get<Database>('DATABASE').SAVE_DATA.MESSAGE_UPDATE)
-                await this.prismaRepository.messageUpdate.create({ data: message });
-
+              if (this.configService.get<Database>('DATABASE').SAVE_DATA.MESSAGE_UPDATE) {
+                // [WIDGET-WORKS] Guard against missing parent message to prevent PrismaClientValidationError
+                if (message.messageId) {
+                  await this.prismaRepository.messageUpdate.create({ data: message });
+                } else {
+                  this.logger.warn(
+                    `[WIDGET-WORKS] Skipping messageUpdate.create for key ${key.id}: Parent message not found.`,
+                  );
+                }
+              }
               if (this.configService.get<Chatwoot>('CHATWOOT').ENABLED && this.localChatwoot?.enabled) {
                 this.chatwootService.eventWhatsapp(
                   Events.MESSAGES_DELETE,
@@ -1524,8 +1532,16 @@ export class BaileysStartupService extends ChannelStartupService {
 
             this.sendDataWebhook(Events.MESSAGES_UPDATE, message);
 
-            if (this.configService.get<Database>('DATABASE').SAVE_DATA.MESSAGE_UPDATE)
-              await this.prismaRepository.messageUpdate.create({ data: message });
+            if (this.configService.get<Database>('DATABASE').SAVE_DATA.MESSAGE_UPDATE) {
+              // [WIDGET-WORKS] Guard against missing parent message to prevent PrismaClientValidationError
+              if (message.messageId) {
+                await this.prismaRepository.messageUpdate.create({ data: message });
+              } else {
+                this.logger.warn(
+                  `[WIDGET-WORKS] Skipping messageUpdate.create for key ${key.id}: Parent message not found.`,
+                );
+              }
+            }
 
             if (!skipMessageUpdateCacheDelete) {
               const cacheDeleteKey = `${this.instanceId}:${message.remoteJid}:${message.keyId}`;
