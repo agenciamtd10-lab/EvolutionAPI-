@@ -34,20 +34,16 @@ The goal is to maintain a stable, custom version of Evolution API that fixes spe
 - **Logs**: When investigating, save relevant logs to `docs/troubleshooting/` with a timestamp.
 
 ### 4. MCP & Tools
-- **Docker MCP Toolkit**: Configured globally as `docker`. Use this for container inspection and management instead of raw shell commands where possible.
-- **Invocation**:
-    - Use `run_command` for shell operations.
-    - Use `read_file`/`write_file` for filesystem.
-    - Use `browser_subagent` only when UI verification is explicitly needed.
 
-## Deployment
+## 5. Deployment
+- Update CHANGELOG.md with the release notes, add ### Widget Works Modification under each evolution version.  
 - **Target**: Azure Container Apps (ACA).
 - **Registry**: Azure Container Registry (ACR) `prospek.azurecr.io`.
 - **Workflow**:
     1.  **Build**: `./build.sh` (Updates `IMAGE_TAG` automatically? No, manual update required).
     2.  **Push**: Script pushes to ACR.
     3.  **Deploy**: Manually update revision in Azure Portal > Container Apps.
-- **Instructions**: See `docs/deployment.md` for the authoritative guide.
+- **Instructions**: See `docs/DEPLOYMENT.md` for the authoritative guide.
 
 ## Current Focus
 - Fixing "Pending Message" duplicate attribution.

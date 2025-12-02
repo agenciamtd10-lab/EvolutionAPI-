@@ -2,75 +2,57 @@
 
 **Date:** Dec 1, 2025
 **Affected Instances:**
-1. `6281110139189 Indorama` (ID: `37298bd5-7eac-4389-84c6-04edaa739437`) - **Issue: Sync Failure**
-2. `628131069178 Indorama` (ID: `48e6c232-1bb9-45cd-a91a-81053effc2d5`) - **Issue: Repeated Disconnects**
+1. `628131069178` (Indorama) - **Issue: Crash Loop (Code Bug)**
+2. `6281110139189` (Indorama) - **Issue: Network Instability (ECONNRESET)**
+3. `628131069189` (Indorama) - **Status: Stable**
 
 ## 1. Executive Summary
-- **Instance 1 (`37298bd5...`)** is connected but failing to sync messages to Prospek. Investigation reveals that while the socket is receiving events (`Update messages`), **no messages are being saved to the database**. This is likely due to network instability (`ECONNRESET`) disrupting the persistence flow or proxy issues.
-- **Instance 2 (`48e6c232...`)** is suffering from repeated `401 device_removed` errors. This is a definitive **conflict** error from WhatsApp, indicating the session is being invalidated externally (e.g., user logging out, duplicate session conflict).
+Investigation confirms distinct root causes for the failing instances.
+- **Instance `...178`** is trapped in a **restart loop caused by a software bug** (`PrismaClientValidationError`). A container restart at 03:05 UTC temporarily cleared the process but the instance crashes immediately upon processing specific message update events.
+- **Instance `...189` (Sync Fail)** is suffering from severe **network instability** (`ECONNRESET`), preventing it from maintaining a connection long enough to sync messages.
+- **Instance `...189` (Stable)** was incorrectly flagged as having conflicts due to a log parsing error; it remains healthy.
 
 ## 2. Investigation Findings
 
-### 2.1 Instance 1: 6281110139189 (Sync Failure)
-**Symptom:** Connected, logs show activity, but Prospek receives no messages.
-
-**Evidence:**
-- **DB Check:** `SELECT * FROM "Message" WHERE "instanceId" = '37298bd5...'` returned **0 rows**.
-- **Logs:**
-    - `Update messages [...]` events are present in logs (e.g., at 03:00 UTC), confirming the socket is alive and receiving data.
-    - **Critical Error:** `Error: read ECONNRESET` observed multiple times (02:31 UTC, 02:36 UTC).
-    - **Logout:** `Instance ... - LOGOUT` event at 02:49 UTC.
-
+### 2.1 Instance 628131069178 (The "Disconnect" Issue)
+**Status:** CRASH LOOP
 **Analysis:**
-The `ECONNRESET` errors suggest the connection between the Evolution container and the WhatsApp servers (or proxy) is unstable. While the socket stays open long enough to receive *some* events, the instability likely interrupts the database transaction or the message processing pipeline before the save completes. Without the message in the `Message` table, the sync logic (which relies on DB triggers/polling) never fires for Prospek.
+This instance is not just "disconnecting"; it is **crashing** the Node.js process, causing the container to automatically restart it.
+- **Trigger:** Processing `messages.update` events (likely status updates or edits).
+- **Error:** `PrismaClientValidationError: Invalid this.cache.delete()`.
+- **Mechanism:** The code attempts to use `this.cache.delete()` incorrectly during message updates. This throws an unhandled exception, crashing the service.
+- **Evidence:**
+    - Logs show repeated startup sequences followed by the error and an immediate `LOGOUT` or process exit.
+    - Timestamps: 03:32, 03:35, 03:40 UTC (looping every few minutes).
+- **Container Restart:** The manual container restart at 03:05 UTC successfully killed any zombie processes, but since the root cause is a code defect, the crashes resumed immediately.
 
-### 2.2 Instance 2: 628131069178 (Repeated Disconnects)
-**Symptom:** Automatically disconnects shortly after connection. User denies logging out.
-
-**Evidence:**
-- **Status:** `close` (Disconnected).
-- **Reason Code:** `401`.
-- **Disconnection Object:** `{"tag":"stream:error","attrs":{"code":"401"},"content":[{"tag":"conflict","attrs":{"type":"device_removed"}}]}`
-- **Proxy:** No proxy configured in `Proxy` table for this instance.
-- **Session Table:** 0 rows found in `Session` table for this instance ID. This suggests Evolution is not successfully persisting the session credentials to the database, or they are being deleted immediately upon disconnect.
-- **History:** Disconnected at 02:36, 02:49, and 02:58 UTC (and previously on Nov 29).
-
+### 2.2 Instance 6281110139189 (The "Sync" Issue)
+**Status:** CONNECTION FAILURE
 **Analysis:**
-If the user is not logging out, the `401 Conflict` combined with the missing `Session` record points to a **race condition or zombie process**.
-1.  **Zombie Process:** Another Evolution instance (perhaps a previous deployment that didn't shut down cleanly, or a staging environment) might still be holding onto the session. When the new instance connects, WhatsApp detects two active sockets for the same session ID and kills both with "conflict".
-2.  **Session Persistence Failure:** Evolution might be failing to save the session tokens correctly. When it tries to reconnect or refresh the token, it sends an invalid/empty token, causing WhatsApp to reject it.
+This instance is failing to establish or maintain a stable socket connection to WhatsApp.
+- **Error:** `Error: read ECONNRESET`.
+- **Impact:** The instance connects briefly but the connection is reset by the peer (network/proxy) before data can be reliably synced or persisted.
+- **Relation to Bug:** It is likely *not* hitting the Prisma bug yet because it cannot stay connected long enough to receive the triggering events.
 
-## 3. Comparison with Mama First (Freeze)
-**Question:** Is this related to the "Mama First" freeze?
-**Answer:** **No.**
-- **Mama First** failed due to a `PrismaClientValidationError` (code bug) causing a crash loop.
-- **Indorama** is failing due to **Network/Proxy Instability** (Instance 1) and **Session Conflict** (Instance 2).
-- The logs for Indorama do *not* show the Prisma cache error.
+### 2.3 Instance 628131069189 (Stable)
+**Status:** HEALTHY
+**Analysis:**
+- Previously reported "Conflict/401" errors were **false positives**.
+- **Explanation:** The log analysis tool incorrectly matched the string "401" inside a WhatsApp Group ID (`120363401...`).
+- **Verification:** Detailed manual review of logs shows normal message processing and Chatwoot sync activity.
 
-## 4. Recommendations
+## 3. Root Cause: The Prisma Bug
+**Issue:** Misuse of the cache deletion method in `src/services/baileys/baileys.service.ts`.
+**Context:** This is the **same bug** responsible for the "Mama First" incident.
+- **Location:** `messages.update` handler.
+- **Impact:** Affects any instance receiving specific types of message updates (e.g., status changes, edits).
 
-### For Instance 1 (`6281110139189` - Sync)
-1.  **Restart:** Disconnect and reconnect the instance to establish a fresh socket.
-2.  **Proxy Check:** If using a proxy, verify its stability/latency. `ECONNRESET` often points here.
-3.  **Monitor:** Watch logs for successful `Message` table inserts after reconnection.
+## 4. Action Plan
 
-### For Instance 2 (`628131069178` - Disconnect)
-1.  **Delete & Recreate:** Instead of just scanning QR, **DELETE** the instance entirely from Evolution and create a new one. This ensures a fresh session ID and clears any corrupted state.
-2.  **Verify Environment:** Ensure no other Evolution deployments (staging, dev) are running with this instance ID.
-3.  **Network:** Ensure the phone has a stable internet connection.
+### Immediate Actions
+1.  **Patch Code (Priority 1):** Fix the `this.cache.delete` call in `baileys.service.ts`. This is critical to stop the crash loops for Instance `...178` and "Mama First".
+2.  **Deploy:** Rebuild and deploy the fixed image.
 
-## 5. Post-Restart Analysis (Dec 1, 03:05 UTC)
-**Status:** Container restarted successfully at `03:05:06 UTC`.
-**Observations from Logs (`logs_indorama.txt`):**
-1.  **Instance 2 Changed:** The logs show a **new** instance connecting: `628131069189` (ID: `ce70e00f...`).
-    - This replaces the problematic `628131069178` (ID: `48e6c232...`).
-    - **Status:** Connected. Logs show `Update messages` and `Update readed messages`. No immediate disconnects observed in the short log window (13s).
-    - **Potential Issue:** If Prospek settings (Instance ID/Token) were not updated to `ce70e00f...`, the integration will fail.
-2.  **Instance 1 Missing:** The instance `6281110139189` (ID: `37298bd5...`) is **absent** from the startup logs captured.
-    - **Risk:** It may not have started, or failed to initialize before the log capture began.
-    - **Action:** Verify if this instance is visible in the Evolution UI.
-
-**Conclusion:** The "still failing" report likely stems from:
-- **Instance 1:** Not running (missing from logs).
-- **Instance 2:** Configuration mismatch (new ID not updated in Prospek) OR transient sync issues not yet visible in short logs.
+### Secondary Actions
+1.  **Monitor Network:** Once the code fix is live, observe Instance `...189` (Sync Fail). If `ECONNRESET` persists, investigate the proxy configuration or network path for that specific number.
 
