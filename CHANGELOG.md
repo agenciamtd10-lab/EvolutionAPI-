@@ -12,6 +12,7 @@
 
 ### Fixed
 
+* **[WIDGET-WORKS]** Stop infinite reconnection loop on WhatsApp 401 conflict/replaced errors (prevents CPU spike, UI freeze, and log spam when session conflicts occur)
 * Added key id into webhook payload in n8n service
 * Enhance RabbitMQ controller with improved connection management and shutdown procedures
 * Convert outgoing images to JPEG before sending with Chatwoot
