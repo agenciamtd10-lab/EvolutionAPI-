@@ -2,8 +2,8 @@
 
 ## Incident Summary
 **Date**: December 1, 2025 ~23:03 WIB (16:03 UTC)
-**Instance**: `43f972cd-fcc5-4422-9954-cbb2ac086e17` (Mama First staging)
-**Environment**: evolution-dev (Azure Container Apps)
+**Instance**: `{INSTANCE_ID}` ({CUSTOMER_NAME} staging)
+**Environment**: `{RESOURCE_GROUP}` (Azure Container Apps)
 **Symptom**: Spam of "🚀 Connection successfully established!" messages, high CPU usage, unresponsive UI
 **Duration**: ~10 minutes (16:03-16:13 UTC)
 
@@ -20,7 +20,7 @@
 ### The Reconnection Loop
 Evolution entered an **infinite reconnection loop** due to improper handling of WhatsApp's "conflict/replaced" error:
 
-1. **User scanned QR code** for instance `6287792348908 Mama First`
+1. **User scanned QR code** for instance `{INSTANCE_NAME}`
 2. **WhatsApp rejected** with stream error:
    ```json
    {
@@ -64,7 +64,7 @@ The **"CONNECTED TO WHATSAPP" banner** is what the user saw as spam messages. Th
 **Log query** (Azure Log Analytics):
 ```kql
 ContainerAppConsoleLogs_CL
-| where ContainerAppName_s == 'evolution-dev'
+| where ContainerAppName_s == '{CONTAINER_APP}'
 | where TimeGenerated between (datetime(2025-12-01T16:00:00Z) .. datetime(2025-12-01T16:15:00Z))
 | summarize count() by bin(TimeGenerated, 1m)
 ```
@@ -202,44 +202,44 @@ If conflict spam occurs again:
    ```bash
    export AZURE_CONFIG_DIR="$(pwd)/.azure"
    az monitor log-analytics query \
-     --workspace 3aaf7750-6587-4814-99ce-72558b7dde41 \
-     --analytics-query "ContainerAppConsoleLogs_CL | where ContainerAppName_s == 'evolution-dev' | where TimeGenerated between (datetime(YYYY-MM-DDTHH:MM:SSZ) .. datetime(YYYY-MM-DDTHH:MM:SSZ)) | summarize count() by bin(TimeGenerated, 1m)" \
+     --workspace {LOG_ANALYTICS_WORKSPACE} \
+     --analytics-query "ContainerAppConsoleLogs_CL | where ContainerAppName_s == '{CONTAINER_APP}' | where TimeGenerated between (datetime(YYYY-MM-DDTHH:MM:SSZ) .. datetime(YYYY-MM-DDTHH:MM:SSZ)) | summarize count() by bin(TimeGenerated, 1m)" \
      --output json
    ```
 
 2. **Search for conflict errors:**
    ```bash
    # In saved logs JSON:
-   grep -i "conflict\|stream error\|401" docs/troubleshooting/logs-evolution-dev-*.json
+   grep -i "conflict\|stream error\|401" docs/troubleshooting/logs-{CONTAINER_APP}-*.json
    ```
 
 3. **Check instance state:**
    ```bash
-   curl -H "apikey: {KEY}" https://evolution-dev.thankfulisland-60830902.southeastasia.azurecontainerapps.io/instance/connectionState/{instanceName}
+   curl -H "apikey: {KEY}" https://{CONTAINER_APP}.{AZURE_RANDOM_SUBDOMAIN}.southeastasia.azurecontainerapps.io/instance/connectionState/{instanceName}
    ```
 
 ### Key IDs & Endpoints
-- **Subscription**: `51f055c6-9754-46dc-82a8-e746d43afec5` (Microsoft Azure Sponsorship)
-- **Resource Group**: `evolution-dev`
-- **Container App**: `evolution-dev`
-- **Log Analytics Workspace**: `3aaf7750-6587-4814-99ce-72558b7dde41`
-- **Staging URL**: `https://evolution-dev.thankfulisland-60830902.southeastasia.azurecontainerapps.io`
-- **Instance ID** (this incident): `43f972cd-fcc5-4422-9954-cbb2ac086e17`
-- **Instance Name** (this incident): `6287792348908 Mama First`
+- **Subscription**: `{SUBSCRIPTION_ID}` (Microsoft Azure Sponsorship)
+- **Resource Group**: `{RESOURCE_GROUP}`
+- **Container App**: `{CONTAINER_APP}`
+- **Log Analytics Workspace**: `{LOG_ANALYTICS_WORKSPACE}`
+- **Staging URL**: `https://{CONTAINER_APP}.{AZURE_RANDOM_SUBDOMAIN}.southeastasia.azurecontainerapps.io`
+- **Instance ID** (this incident): `{INSTANCE_ID}`
+- **Instance Name** (this incident): `{INSTANCE_NAME}`
 
 ### Emergency Workaround
 If reconnection loop happens again:
 ```bash
 # Stop container (forces restart, breaks loop)
 az containerapp revision restart \
-  --name evolution-dev \
-  --resource-group evolution-dev \
+  --name {CONTAINER_APP} \
+  --resource-group {RESOURCE_GROUP} \
   --revision {current-revision-name}
 
 # OR delete instance via API (won't work if UI frozen - use container restart)
 curl -X DELETE \
   -H "apikey: {KEY}" \
-  https://evolution-dev.thankfulisland-60830902.southeastasia.azurecontainerapps.io/instance/delete/{instanceName}
+  https://{CONTAINER_APP}.{AZURE_RANDOM_SUBDOMAIN}.southeastasia.azurecontainerapps.io/instance/delete/{instanceName}
 ```
 
 ### Testing the Fix
@@ -262,7 +262,7 @@ curl -X DELETE \
 See [logs-howto.md](logs-howto.md) for complete reference. Replace `YYYY-MM-DD` with incident date:
 ```kql
 ContainerAppConsoleLogs_CL
-| where ContainerAppName_s == 'evolution-dev'
+| where ContainerAppName_s == '{CONTAINER_APP}'
 | where TimeGenerated between (datetime(YYYY-MM-DDTHH:MM:SSZ) .. datetime(YYYY-MM-DDTHH:MM:SSZ))
 | where Log_s contains "CONNECTED TO WHATSAPP" or Log_s contains "conflict" or Log_s contains "stream error"
 | project TimeGenerated, Log_s
