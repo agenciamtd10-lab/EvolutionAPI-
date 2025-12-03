@@ -1187,6 +1187,36 @@ export class BaileysStartupService extends ChannelStartupService {
 
           const messageRaw = this.prepareMessage(received);
 
+          const shouldSyncChatwoot =
+            this.configService.get<Chatwoot>('CHATWOOT').ENABLED &&
+            this.localChatwoot?.enabled &&
+            !received.key.id.includes('@broadcast');
+
+          if (shouldSyncChatwoot) {
+            const existingChatwootMessage = await this.prismaRepository.message.findFirst({
+              where: {
+                instanceId: this.instanceId, // [WIDGET-WORKS] Scope Chatwoot dedupe to current instance
+                key: { path: ['id'], equals: received.key.id },
+                chatwootMessageId: { not: null },
+              },
+              select: {
+                chatwootMessageId: true,
+                chatwootInboxId: true,
+                chatwootConversationId: true,
+              },
+            });
+
+            if (existingChatwootMessage) {
+              this.logger.verbose(
+                `[WIDGET-WORKS] Message ${received.key.id} already synced to Chatwoot (ID: ${existingChatwootMessage.chatwootMessageId}), skipping duplicate sync`,
+              );
+
+              messageRaw.chatwootMessageId = existingChatwootMessage.chatwootMessageId;
+              messageRaw.chatwootInboxId = existingChatwootMessage.chatwootInboxId;
+              messageRaw.chatwootConversationId = existingChatwootMessage.chatwootConversationId;
+            }
+          }
+
           const isMedia =
             received?.message?.imageMessage ||
             received?.message?.videoMessage ||
@@ -1204,11 +1234,8 @@ export class BaileysStartupService extends ChannelStartupService {
             await this.client.readMessages([received.key]);
           }
 
-          if (
-            this.configService.get<Chatwoot>('CHATWOOT').ENABLED &&
-            this.localChatwoot?.enabled &&
-            !received.key.id.includes('@broadcast')
-          ) {
+          if (shouldSyncChatwoot && !messageRaw.chatwootMessageId) {
+            // [WIDGET-WORKS] Skip Chatwoot sync if this message was already synced (DB fallback after cache miss)
             const chatwootSentMessage = await this.chatwootService.eventWhatsapp(
               Events.MESSAGES_UPSERT,
               { instanceName: this.instance.name, instanceId: this.instanceId },
