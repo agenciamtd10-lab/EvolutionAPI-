@@ -348,7 +348,7 @@ export class ChatwootService {
     }
   }
 
-  public async updateContact(instance: InstanceDto, id: number, data: any) {
+  public async updateContact(instance: InstanceDto, id: number, data: any): Promise<any> {
     const client = await this.clientCw(instance);
 
     if (!client) {
@@ -370,6 +370,7 @@ export class ChatwootService {
 
       return contact;
     } catch (error) {
+      this.logger.error(`[WIDGET-WORKS] updateContact failed: ${error?.message || error}`);
       return null;
     }
   }
@@ -712,11 +713,18 @@ export class ChatwootService {
             this.logger.verbose(`Picture needs update: ${pictureNeedsUpdate}`);
             this.logger.verbose(`Name needs update: ${nameNeedsUpdate}`);
             if (pictureNeedsUpdate || nameNeedsUpdate) {
-              contact = await this.updateContact(instance, contact.id, {
+              const updatedContact = await this.updateContact(instance, contact.id, {
                 ...(nameNeedsUpdate && { name: nameContact }),
                 ...(waProfilePictureFile === '' && { avatar: null }),
                 ...(pictureNeedsUpdate && { avatar_url: picture_url?.profilePictureUrl }),
               });
+
+              // [WIDGET-WORKS] Avoid nulling the contact when updateContact fails; keep existing contact to continue sync.
+              if (updatedContact) {
+                contact = updatedContact;
+              } else {
+                this.logger.warn('[WIDGET-WORKS] Failed to update contact; continuing with existing contact');
+              }
             }
           }
         } else {
