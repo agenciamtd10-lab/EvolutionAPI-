@@ -1549,7 +1549,39 @@ export class ChatwootService {
 
         sendTelemetry('/message/sendText');
 
-        await waInstance?.textMessage(data);
+        // [WIDGET-WORKS] Link template messages to Chatwoot to prevent echo duplicates
+        let messageSent: any;
+        try {
+          messageSent = await waInstance?.textMessage(data);
+          if (!messageSent) {
+            throw new Error('Template message not sent');
+          }
+
+          if (Long.isLong(messageSent?.messageTimestamp)) {
+            messageSent.messageTimestamp = messageSent.messageTimestamp?.toNumber();
+          }
+
+          await this.updateChatwootMessageId(
+            {
+              ...messageSent,
+              instanceId: instance.instanceId,
+            },
+            {
+              messageId: body.id,
+              inboxId: body.inbox?.id,
+              conversationId: body.conversation?.id,
+              contactInboxSourceId: body.conversation?.contact_inbox?.source_id,
+            },
+            instance,
+          );
+        } catch (error) {
+          this.logger.warn(
+            `[WIDGET-WORKS] Failed to update template message ${body.id} with Chatwoot IDs: ${error?.message}`,
+          );
+          if (!messageSent && body.conversation?.id) {
+            this.onSendMessageError(instance, body.conversation?.id, error);
+          }
+        }
       }
 
       return { message: 'bot' };
