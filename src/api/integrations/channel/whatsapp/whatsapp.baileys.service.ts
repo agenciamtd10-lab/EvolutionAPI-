@@ -299,6 +299,31 @@ export class BaileysStartupService extends ChannelStartupService {
   }
 
   private async connectionUpdate({ qr, connection, lastDisconnect }: Partial<ConnectionState>) {
+    const logBaileysEnv = (process.env.LOG_BAILEYS ?? '').toLowerCase();
+    const shouldLogConnectionUpdate = ['true', 'debug', 'trace'].includes(logBaileysEnv);
+    if (shouldLogConnectionUpdate) {
+      const lastDisconnectError = lastDisconnect?.error as Boom;
+      const statusCode = lastDisconnectError?.output?.statusCode;
+      const disconnectData = lastDisconnectError?.data;
+      const wsSocket = this.client?.ws as any;
+      // [WIDGET-WORKS] ws from Baileys' WebSocketClient does not expose close metadata in typings; pull from runtime if present.
+      const wsCloseCode = wsSocket?.closeCode ?? wsSocket?._closeCode ?? wsSocket?.ws?.closeCode;
+      const wsCloseReason = wsSocket?.closeReason ?? wsSocket?._closeMessage ?? wsSocket?.ws?.closeReason;
+      let serializedDisconnectData = 'n/a';
+      if (disconnectData) {
+        try {
+          serializedDisconnectData = JSON.stringify(disconnectData);
+        } catch {
+          serializedDisconnectData = '[unserializable]';
+        }
+      }
+
+      // [WIDGET-WORKS] Emit detailed Baileys connection updates when LOG_BAILEYS is enabled.
+      this.logger.warn(
+        `[WIDGET-WORKS] Baileys connection.update | instance=${this.instance.name} id=${this.instanceId} state=${connection ?? 'unknown'} statusCode=${statusCode ?? 'n/a'} wsCloseCode=${wsCloseCode ?? 'n/a'} wsCloseReason=${wsCloseReason ?? 'n/a'} disconnectData=${serializedDisconnectData}`,
+      );
+    }
+
     if (qr) {
       if (this.instance.qrcode.count === this.configService.get<QrCode>('QRCODE').LIMIT) {
         this.sendDataWebhook(Events.QRCODE_UPDATED, {

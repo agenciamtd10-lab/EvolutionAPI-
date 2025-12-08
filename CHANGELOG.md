@@ -10,6 +10,7 @@
 * [WIDGET-WORKS] Skip Chatwoot sync in `messages.upsert` when a message key already has `chatwootMessageId` (handles Chatwoot automation echoes/duplicates).
 * [WIDGET-WORKS] Avoid dropping group conversations when Chatwoot `updateContact` fails by logging the error and continuing with the existing contact.
 * [WIDGET-WORKS] Link template messages to Chatwoot to prevent echo duplicates (fixes "Pending Message" duplicate attribution for automated greetings).
+* [WIDGET-WORKS] Add LOG_BAILEYS-gated Baileys `connection.update` logging (state, disconnect codes, close reason) to diagnose session drops.
 
 
 ### Features
