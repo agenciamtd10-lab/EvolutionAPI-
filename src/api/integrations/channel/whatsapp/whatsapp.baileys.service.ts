@@ -1565,9 +1565,10 @@ export class BaileysStartupService extends ChannelStartupService {
               if (message.messageId) {
                 await this.prismaRepository.messageUpdate.create({ data: message });
               } else {
-                this.logger.warn(
-                  `[WIDGET-WORKS] Skipping messageUpdate.create for key ${key.id}: Parent message not found.`,
-                );
+                // [WIDGET-WORKS] Silenced warning to prevent log flood during history sync
+                // this.logger.warn(
+                //   `[WIDGET-WORKS] Skipping messageUpdate.create for key ${key.id}: Parent message not found.`,
+                // );
               }
             }
 

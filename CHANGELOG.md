@@ -2,6 +2,7 @@
 
 ### Widget Works Modification
 
+* [WIDGET-WORKS] Silence "Parent message not found" warnings during history sync to prevent CPU overload and subsequent 401 disconnects.
 * [WIDGET-WORKS] Fix `PrismaClientValidationError` in `messages.update` (missing `Message` relation) by guarding `messageUpdate.create` calls.
 * [WIDGET-WORKS] Guard `messages.update` cache cleanup with a derived key and optional `MESSAGE_UPDATE_CACHE_DELETE_DISABLED` flag to prevent cache.delete crash-loops.
 * [WIDGET-WORKS] Save messages before Chatwoot sync in `/message/sendText` to avoid missing `chatwootMessageId` and log async sync failures.
