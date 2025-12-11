@@ -15,6 +15,10 @@ COPY ./tsup.config.ts ./
 
 RUN npm ci --silent
 
+# [WIDGET-WORKS] Apply Baileys patch for LID group send fix
+COPY ./patches ./patches
+RUN patch -p0 < patches/baileys+6.7.19+lid-group-send.patch || echo "Patch already applied or failed"
+
 COPY ./src ./src
 COPY ./public ./public
 COPY ./prisma ./prisma

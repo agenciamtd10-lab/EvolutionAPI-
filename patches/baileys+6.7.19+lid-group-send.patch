@@ -1,0 +1,22 @@
+diff --git a/node_modules/baileys/lib/Socket/messages-send.js b/node_modules/baileys/lib/Socket/messages-send.js
+index 1234567..abcdefg 100644
+--- a/node_modules/baileys/lib/Socket/messages-send.js
++++ b/node_modules/baileys/lib/Socket/messages-send.js
+@@ -360,8 +360,14 @@ export const makeMessagesSocket = (config) => {
+                     meId
+                 });
+                 const senderKeyJids = [];
+-                // ensure a connection is established with every device
++                // [WIDGET-WORKS] Filter sender's own devices from senderKeyJids (LID group send fix)
++                // Same pattern as non-group path (line ~396) - fixes "not-acceptable" error
++                const { user: meUser } = jidDecode(meId);
++                const meLid = authState.creds?.me?.lid?.split(':')[0]?.split('@')[0];
++                // ensure a connection is established with every device
+                 for (const { user, device } of devices) {
++                    // [WIDGET-WORKS] Skip sender's own devices
++                    if (user === meUser || user === meLid) {
++                        continue;
++                    }
+                     const jid = jidEncode(user, groupData?.addressingMode === 'lid' ? 'lid' : 's.whatsapp.net', device);
+                     if (!senderKeyMap[jid] || !!participant) {
+                         senderKeyJids.push(jid);
