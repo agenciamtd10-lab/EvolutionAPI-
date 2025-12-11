@@ -157,29 +157,35 @@ export class ChannelStartupService {
   }
 
   public async setSettings(data: SettingsDto) {
+    // Helper function to truncate strings to max length
+    const truncate = (str: string | null | undefined, maxLength: number): string | null => {
+      if (!str) return null;
+      return str.length > maxLength ? str.substring(0, maxLength) : str;
+    };
+
     await this.prismaRepository.setting.upsert({
       where: {
         instanceId: this.instanceId,
       },
       update: {
         rejectCall: data.rejectCall,
-        msgCall: data.msgCall,
+        msgCall: truncate(data.msgCall, 100),
         groupsIgnore: data.groupsIgnore,
         alwaysOnline: data.alwaysOnline,
         readMessages: data.readMessages,
         readStatus: data.readStatus,
         syncFullHistory: data.syncFullHistory,
-        wavoipToken: data.wavoipToken,
+        wavoipToken: truncate(data.wavoipToken, 100),
       },
       create: {
         rejectCall: data.rejectCall,
-        msgCall: data.msgCall,
+        msgCall: truncate(data.msgCall, 100),
         groupsIgnore: data.groupsIgnore,
         alwaysOnline: data.alwaysOnline,
         readMessages: data.readMessages,
         readStatus: data.readStatus,
         syncFullHistory: data.syncFullHistory,
-        wavoipToken: data.wavoipToken,
+        wavoipToken: truncate(data.wavoipToken, 100),
         instanceId: this.instanceId,
       },
     });

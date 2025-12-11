@@ -240,25 +240,39 @@ export class WAMonitoringService {
 
   public async saveInstance(data: any) {
     try {
-      const clientName = await this.configService.get<Database>('DATABASE').CONNECTION.CLIENT_NAME;
+      const clientName = this.configService.get<Database>('DATABASE').CONNECTION.CLIENT_NAME;
+
+      // Helper function to truncate strings to max length
+      const truncate = (str: string | null | undefined, maxLength: number): string | null => {
+        if (!str) return null;
+        return str.length > maxLength ? str.substring(0, maxLength) : str;
+      };
+
+      // Ensure instanceName is not empty (required field)
+      const instanceName = truncate(data.instanceName, 255);
+      if (!instanceName || instanceName.trim().length === 0) {
+        throw new Error('instanceName is required and cannot be empty');
+      }
+
       await this.prismaRepository.instance.create({
         data: {
           id: data.instanceId,
-          name: data.instanceName,
-          ownerJid: data.ownerJid,
-          profileName: data.profileName,
-          profilePicUrl: data.profilePicUrl,
+          name: instanceName,
+          ownerJid: truncate(data.ownerJid, 100),
+          profileName: truncate(data.profileName, 100),
+          profilePicUrl: truncate(data.profilePicUrl, 500),
           connectionStatus:
             data.integration && data.integration === Integration.WHATSAPP_BAILEYS ? 'close' : (data.status ?? 'open'),
-          number: data.number,
-          integration: data.integration || Integration.WHATSAPP_BAILEYS,
-          token: data.hash,
-          clientName: clientName,
-          businessId: data.businessId,
+          number: truncate(data.number, 100),
+          integration: truncate(data.integration || Integration.WHATSAPP_BAILEYS, 100),
+          token: truncate(data.hash, 255),
+          clientName: truncate(clientName, 100),
+          businessId: truncate(data.businessId, 100),
         },
       });
     } catch (error) {
       this.logger.error(error);
+      throw error; // Propagate error to prevent creating settings if instance creation fails
     }
   }
 
@@ -338,7 +352,7 @@ export class WAMonitoringService {
   }
 
   private async loadInstancesFromDatabasePostgres() {
-    const clientName = await this.configService.get<Database>('DATABASE').CONNECTION.CLIENT_NAME;
+    const clientName = this.configService.get<Database>('DATABASE').CONNECTION.CLIENT_NAME;
 
     const instances = await this.prismaRepository.instance.findMany({
       where: { clientName: clientName },
