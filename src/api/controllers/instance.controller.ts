@@ -72,6 +72,15 @@ export class InstanceController {
         status: instanceData.status,
       });
 
+      // Verifica se a Instance foi criada com sucesso antes de continuar
+      const createdInstance = await this.prismaRepository.instance.findUnique({
+        where: { id: instanceId },
+      });
+
+      if (!createdInstance) {
+        throw new BadRequestException('Failed to create instance in database');
+      }
+
       // Para WhatsApp Business, setInstance é async e precisa ser aguardado
       if (instanceData.integration === Integration.WHATSAPP_BUSINESS) {
         await (instance as any).setInstance({
