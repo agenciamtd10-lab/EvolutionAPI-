@@ -66,16 +66,19 @@ export class BusinessStartupService extends ChannelStartupService {
       this.fullToken = instance.token;
       const cacheKey = `instance:${instance.instanceName}:fullToken`;
       await this.cache.set(cacheKey, instance.token, 0);
-      this.logger.log(`Stored full token in cache for ${instance.instanceName}`);
+      this.logger.log({ message: 'Stored full token in cache', instanceName: instance.instanceName });
     } else {
       // Tenta carregar token completo do cache
       const cacheKey = `instance:${instance.instanceName}:fullToken`;
       const fullToken = await this.cache.get(cacheKey);
       if (fullToken) {
         this.fullToken = fullToken;
-        this.logger.log(`Loaded full token from cache for ${instance.instanceName}`);
+        this.logger.log({ message: 'Loaded full token from cache', instanceName: instance.instanceName });
       } else {
-        this.logger.warn(`Full token not found in cache for ${instance.instanceName}, using truncated token`);
+        this.logger.warn({
+          message: 'Full token not found in cache, using truncated token',
+          instanceName: instance.instanceName,
+        });
       }
     }
   }

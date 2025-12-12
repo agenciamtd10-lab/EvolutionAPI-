@@ -37,7 +37,7 @@ async function apikey(req: Request, _: Response, next: NextFunction) {
         if (key.length > 255 && instance.integration === Integration.WHATSAPP_BUSINESS) {
           const cacheKey = `instance:${param.instanceName}:fullToken`;
           await cache.set(cacheKey, key, 0);
-          logger.log(`Stored full token in cache for ${param.instanceName} from request`);
+          logger.log({ message: 'Stored full token in cache from request', instanceName: param.instanceName });
 
           // Atualiza a instância em memória se existir
           if (waMonitor.waInstances[param.instanceName]) {
@@ -52,9 +52,9 @@ async function apikey(req: Request, _: Response, next: NextFunction) {
                   number: instance.number,
                   businessId: instance.businessId,
                 });
-                logger.log(`Updated full token in memory for ${param.instanceName}`);
+                logger.log({ message: 'Updated full token in memory', instanceName: param.instanceName });
               } catch (error) {
-                logger.error(`Error updating token in memory: ${error}`);
+                logger.error({ message: 'Error updating token in memory', error, instanceName: param.instanceName });
               }
             }
           }
@@ -72,7 +72,7 @@ async function apikey(req: Request, _: Response, next: NextFunction) {
           if (key.length > 255 && instanceByKey.integration === Integration.WHATSAPP_BUSINESS) {
             const cacheKey = `instance:${instanceByKey.name}:fullToken`;
             await cache.set(cacheKey, key, 0);
-            logger.log(`Stored full token in cache for ${instanceByKey.name} from request`);
+            logger.log({ message: 'Stored full token in cache from request', instanceName: instanceByKey.name });
 
             // Atualiza a instância em memória se existir
             if (waMonitor.waInstances[instanceByKey.name]) {
@@ -87,9 +87,9 @@ async function apikey(req: Request, _: Response, next: NextFunction) {
                     number: instanceByKey.number,
                     businessId: instanceByKey.businessId,
                   });
-                  logger.log(`Updated full token in memory for ${instanceByKey.name}`);
+                  logger.log({ message: 'Updated full token in memory', instanceName: instanceByKey.name });
                 } catch (error) {
-                  logger.error(`Error updating token in memory: ${error}`);
+                  logger.error({ message: 'Error updating token in memory', error, instanceName: instanceByKey.name });
                 }
               }
             }
