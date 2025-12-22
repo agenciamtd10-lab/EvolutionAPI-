@@ -8,10 +8,8 @@ services:
       dockerfile: Dockerfile
     restart: always
     depends_on:
-      mysql-db:
-        condition: service_healthy
-      redis:
-        condition: service_started
+      - mysql-db
+      - redis
     ports:
       - "127.0.0.1:8081:8080"
     volumes:
@@ -28,16 +26,16 @@ services:
       - "8080"
 
   frontend:
-    container_name: evolution_frontend
+    container_name: evolution_frontend_mysql
     image: evoapicloud/evolution-manager:latest
     restart: always
     ports:
-      - "3000:80"
+      - "3002:80"
     networks:
       - evolution-net
 
   redis:
-    container_name: evolution_redis
+    container_name: evolution_redis_mysql
     image: redis:latest
     restart: always
     command: >
@@ -52,7 +50,7 @@ services:
       - "6379"
 
   mysql-db:
-    container_name: mysql_evolution_db
+    container_name: mysql_evolution_db_mysql
     image: mysql:8.0
     restart: always
     environment:
@@ -69,13 +67,14 @@ services:
       - mysql_data:/var/lib/mysql
     networks:
       - evolution-net
-    expose:
-      - "3306"
+    ports:
+      - "3308:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
-      timeout: 5s
-      retries: 5
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
 volumes:
   evolution_instances_mysql:
