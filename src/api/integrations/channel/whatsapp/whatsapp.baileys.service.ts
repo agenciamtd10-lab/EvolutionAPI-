@@ -1670,20 +1670,40 @@ export class BaileysStartupService extends ChannelStartupService {
 
             const searchId = originalMessageId || key.id;
 
-            // Find message by filtering in application (compatible with MySQL and PostgreSQL)
-            const allMessages = await this.prismaRepository.message.findMany({
-              where: { instanceId: this.instanceId },
-              take: 100,
-            });
-            const targetMsg = allMessages.find((m: any) => {
-              try {
-                const msgKey = typeof m.key === 'string' ? JSON.parse(m.key) : m.key;
-                return msgKey?.id === searchId;
-              } catch {
-                return false;
+            // Find message using pagination to ensure we search all messages
+            // Replaces arbitrary limit of 100 with proper batched search
+            const pageSize = 100;
+            let pageNumber = 0;
+            const maxPages = 100; // Maximum 10,000 messages to search
+
+            while (pageNumber < maxPages && !findMessage) {
+              const messages = await this.prismaRepository.message.findMany({
+                where: { instanceId: this.instanceId },
+                skip: pageNumber * pageSize,
+                take: pageSize,
+                orderBy: { createdAt: 'desc' }, // Most recent first
+              });
+
+              if (messages.length === 0) {
+                break; // No more messages
               }
-            });
-            findMessage = targetMsg || null;
+
+              const targetMsg = messages.find((m: any) => {
+                try {
+                  const msgKey = typeof m.key === 'string' ? JSON.parse(m.key) : m.key;
+                  return msgKey?.id === searchId;
+                } catch {
+                  return false;
+                }
+              });
+
+              if (targetMsg) {
+                findMessage = targetMsg;
+                break;
+              }
+
+              pageNumber++;
+            }
 
             if (!findMessage?.id) {
               this.logger.warn(`Original message not found for update. Skipping. Key: ${JSON.stringify(key)}`);

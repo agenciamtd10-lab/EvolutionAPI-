@@ -755,17 +755,29 @@ export class ChannelStartupService {
       orderBy: { messageTimestamp: 'desc' },
     });
 
+    // Group messages by remoteJid for O(1) lookup instead of O(n) per chat
+    // This prevents O(#chats × #messages) complexity
+    const messagesByRemoteJid = new Map<string, typeof messages>();
+    for (const msg of messages) {
+      try {
+        const msgKey = typeof msg.key === 'string' ? JSON.parse(msg.key) : msg.key;
+        const remoteJid = msgKey?.remoteJid;
+        if (remoteJid) {
+          if (!messagesByRemoteJid.has(remoteJid)) {
+            messagesByRemoteJid.set(remoteJid, []);
+          }
+          messagesByRemoteJid.get(remoteJid)!.push(msg);
+        }
+      } catch {
+        // Skip messages with invalid keys
+      }
+    }
+
     // Map results to expected format
     const mappedResults = chats.map((chat) => {
-      // Find latest message for this chat by parsing key JSON
-      const lastMessage = messages.find((m) => {
-        try {
-          const msgKey = typeof m.key === 'string' ? JSON.parse(m.key) : m.key;
-          return msgKey?.remoteJid === chat.remoteJid;
-        } catch {
-          return false;
-        }
-      });
+      // Get latest message for this chat from pre-grouped map
+      const chatMessages = messagesByRemoteJid.get(chat.remoteJid);
+      const lastMessage = chatMessages?.[0]; // Already sorted by timestamp desc
 
       const now = new Date();
       const windowExpires = chat.createdAt ? new Date(chat.createdAt.getTime() + 24 * 60 * 60 * 1000) : now;
