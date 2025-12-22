@@ -522,27 +522,33 @@ export class BaileysStartupService extends ChannelStartupService {
 
   private async getMessage(key: proto.IMessageKey, full = false) {
     try {
-      // Fetch messages in batches to find the one with matching key.id
-      // Using pagination instead of arbitrary limit to ensure we find the message
+      const cacheKey = `message_${key.id}`;
+      const cached = await this.baileysCache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
+      // Fetch messages in batches, searching recent first for typical case
       const pageSize = 100;
       let pageNumber = 0;
-      const maxPages = 100; // Maximum 10,000 messages to search
+      const maxPages = 100; // Maximum 10,000 messages
 
       while (pageNumber < maxPages) {
         const messages = await this.prismaRepository.message.findMany({
-          where: {
-            instanceId: this.instanceId,
-          },
+          where: { instanceId: this.instanceId },
           skip: pageNumber * pageSize,
           take: pageSize,
-          orderBy: { messageTimestamp: 'desc' }, // Most recent first
+          orderBy: { messageTimestamp: 'desc' },
+          select: {
+            id: true,
+            key: true,
+            message: true,
+          },
         });
 
-        if (messages.length === 0) {
-          break; // No more messages
-        }
+        if (messages.length === 0) break;
 
-        // Filter by key.id (handle both string and object keys)
+        // Find message by key.id
         const webMessageInfo = messages.find((m) => {
           try {
             const msgKey = typeof m.key === 'string' ? JSON.parse(m.key) : m.key;
@@ -553,25 +559,9 @@ export class BaileysStartupService extends ChannelStartupService {
         });
 
         if (webMessageInfo) {
-          if (full) {
-            return webMessageInfo;
-          }
-
-          const msg = webMessageInfo.message;
-          if (msg && typeof msg === 'object' && 'pollCreationMessage' in msg) {
-            const messageSecretBase64 = (msg as any).messageContextInfo?.messageSecret;
-
-            if (typeof messageSecretBase64 === 'string') {
-              const messageSecret = Buffer.from(messageSecretBase64, 'base64');
-
-              return {
-                messageContextInfo: { messageSecret },
-                pollCreationMessage: (msg as any).pollCreationMessage,
-              };
-            }
-          }
-
-          return msg;
+          const result = this.extractMessageContent(webMessageInfo, full);
+          await this.baileysCache.set(cacheKey, result, 3600); // Cache 1 hour
+          return result;
         }
 
         pageNumber++;
@@ -581,6 +571,25 @@ export class BaileysStartupService extends ChannelStartupService {
     } catch {
       return { conversation: '' };
     }
+  }
+
+  private extractMessageContent(msg: any, full = false) {
+    if (full) return msg;
+
+    const messageContent = msg.message;
+    if (messageContent && typeof messageContent === 'object' && 'pollCreationMessage' in messageContent) {
+      const messageSecretBase64 = (messageContent as any).messageContextInfo?.messageSecret;
+
+      if (typeof messageSecretBase64 === 'string') {
+        const messageSecret = Buffer.from(messageSecretBase64, 'base64');
+        return {
+          messageContextInfo: { messageSecret },
+          pollCreationMessage: (messageContent as any).pollCreationMessage,
+        };
+      }
+    }
+
+    return messageContent;
   }
 
   private async defineAuthState() {
@@ -1670,39 +1679,50 @@ export class BaileysStartupService extends ChannelStartupService {
 
             const searchId = originalMessageId || key.id;
 
-            // Find message using pagination to ensure we search all messages
-            // Replaces arbitrary limit of 100 with proper batched search
-            const pageSize = 100;
-            let pageNumber = 0;
-            const maxPages = 100; // Maximum 10,000 messages to search
+            // Try cache first to avoid database lookup
+            const cacheKeyMsg = `orig_msg_${searchId}`;
+            const cachedMsg = await this.baileysCache.get(cacheKeyMsg);
+            if (cachedMsg) {
+              findMessage = cachedMsg;
+            } else {
+              // Find message using pagination with optimized select
+              const pageSize = 100;
+              let pageNumber = 0;
+              const maxPages = 100; // Maximum 10,000 messages
 
-            while (pageNumber < maxPages && !findMessage) {
-              const messages = await this.prismaRepository.message.findMany({
-                where: { instanceId: this.instanceId },
-                skip: pageNumber * pageSize,
-                take: pageSize,
-                orderBy: { messageTimestamp: 'desc' }, // Most recent first
-              });
+              while (pageNumber < maxPages && !findMessage) {
+                const messages = await this.prismaRepository.message.findMany({
+                  where: { instanceId: this.instanceId },
+                  skip: pageNumber * pageSize,
+                  take: pageSize,
+                  orderBy: { messageTimestamp: 'desc' },
+                  select: {
+                    id: true,
+                    key: true,
+                    messageTimestamp: true,
+                    status: true,
+                  },
+                });
 
-              if (messages.length === 0) {
-                break; // No more messages
-              }
+                if (messages.length === 0) break;
 
-              const targetMsg = messages.find((m: any) => {
-                try {
-                  const msgKey = typeof m.key === 'string' ? JSON.parse(m.key) : m.key;
-                  return msgKey?.id === searchId;
-                } catch {
-                  return false;
+                const targetMsg = messages.find((m: any) => {
+                  try {
+                    const msgKey = typeof m.key === 'string' ? JSON.parse(m.key) : m.key;
+                    return msgKey?.id === searchId;
+                  } catch {
+                    return false;
+                  }
+                });
+
+                if (targetMsg) {
+                  findMessage = targetMsg;
+                  await this.baileysCache.set(cacheKeyMsg, findMessage, 3600);
+                  break;
                 }
-              });
 
-              if (targetMsg) {
-                findMessage = targetMsg;
-                break;
+                pageNumber++;
               }
-
-              pageNumber++;
             }
 
             if (!findMessage?.id) {

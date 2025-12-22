@@ -1617,60 +1617,50 @@ export class ChatwootService {
       return;
     }
 
-    // Find and update messages using pagination to ensure we find the correct message
-    // instead of relying on arbitrary take: 100 limit
-    const pageSize = 100;
+    // Batch collect update operations and execute in transaction
+    // Avoids N+1 queries and ensures atomicity
+    const updates = [];
+    const pageSize = 500;
     let pageNumber = 0;
-    const maxPages = 100; // Maximum 10,000 messages to search
-    let result = 0;
+    const maxPages = 20; // Max 10,000 messages
 
     while (pageNumber < maxPages) {
       const messages = await this.prismaRepository.message.findMany({
-        where: {
-          instanceId: instance.instanceId,
-        },
+        where: { instanceId: instance.instanceId },
         skip: pageNumber * pageSize,
         take: pageSize,
-        orderBy: { messageTimestamp: 'desc' }, // Most recent first
+        select: { id: true, key: true },
       });
 
-      if (messages.length === 0) {
-        break; // No more messages
-      }
+      if (messages.length === 0) break;
 
-      // Filter by key.id
-      const targetMessages = messages.filter((m) => {
+      for (const msg of messages) {
         try {
-          const msgKey = typeof m.key === 'string' ? JSON.parse(m.key) : m.key;
-          return msgKey?.id === key.id;
+          const msgKey = typeof msg.key === 'string' ? JSON.parse(msg.key) : msg.key;
+          if (msgKey?.id === key.id) {
+            updates.push(
+              this.prismaRepository.message.update({
+                where: { id: msg.id },
+                data: {
+                  chatwootMessageId: chatwootMessageIds.messageId,
+                  chatwootConversationId: chatwootMessageIds.conversationId,
+                  chatwootInboxId: chatwootMessageIds.inboxId,
+                  chatwootContactInboxSourceId: chatwootMessageIds.contactInboxSourceId,
+                  chatwootIsRead: chatwootMessageIds.isRead || false,
+                },
+              }),
+            );
+          }
         } catch {
-          return false;
+          // Skip invalid keys
         }
-      });
-
-      // Update all matching messages in this batch
-      for (const msg of targetMessages) {
-        await this.prismaRepository.message.update({
-          where: { id: msg.id },
-          data: {
-            chatwootMessageId: chatwootMessageIds.messageId,
-            chatwootConversationId: chatwootMessageIds.conversationId,
-            chatwootInboxId: chatwootMessageIds.inboxId,
-            chatwootContactInboxSourceId: chatwootMessageIds.contactInboxSourceId,
-            chatwootIsRead: chatwootMessageIds.isRead || false,
-          },
-        });
-        result++;
       }
 
-      // If we found matches, we can stop searching
-      if (targetMessages.length > 0) {
-        break;
-      }
-
+      if (updates.length > 0) break;
       pageNumber++;
     }
 
+    const result = updates.length > 0 ? (await this.prismaRepository.$transaction(updates)).length : 0;
     this.logger.verbose(`Update result: ${result} rows affected`);
 
     if (this.isImportHistoryAvailable()) {
