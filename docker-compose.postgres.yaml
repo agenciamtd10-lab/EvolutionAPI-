@@ -1,0 +1,88 @@
+version: "3.8"
+
+services:
+  api-postgres:
+    container_name: evolution_api_postgres
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8083:8080"
+    volumes:
+      - evolution_instances_postgres:/evolution/instances
+    networks:
+      - evolution-net
+    env_file:
+      - .env.postgres
+    environment:
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://postgres:postgres@postgres-db:5432/evolution_db?schema=evolution_api
+      - CACHE_REDIS_URI=redis://redis:6379/6
+    expose:
+      - "8080"
+
+  frontend:
+    container_name: evolution_frontend_postgres
+    image: evoapicloud/evolution-manager:latest
+    restart: always
+    ports:
+      - "3001:80"
+    networks:
+      - evolution-net
+
+  redis:
+    container_name: evolution_redis_postgres
+    image: redis:latest
+    restart: always
+    command: >
+      redis-server --port 6379 --appendonly yes
+    volumes:
+      - evolution_redis_postgres:/data
+    networks:
+      evolution-net:
+        aliases:
+          - evolution-redis
+    expose:
+      - "6379"
+
+  postgres-db:
+    container_name: postgres_evolution_db
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DATABASE:-evolution}
+      POSTGRES_USER: ${POSTGRES_USERNAME:-evolution}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-evolution_password}
+    command:
+      - postgres
+      - -c
+      - max_connections=1000
+      - -c
+      - listen_addresses=*
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - evolution-net
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  evolution_instances_postgres:
+  evolution_redis_postgres:
+  postgres_data:
+
+networks:
+  evolution-net:
+    name: evolution-net
+    driver: bridge
