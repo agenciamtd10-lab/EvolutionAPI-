@@ -736,26 +736,15 @@ export class ChannelStartupService {
         instanceId: this.instanceId,
         ...(remoteJid && { remoteJid }),
       },
-      include: {
-        Contact: true,
-        Instance: true,
-      },
       orderBy: { updatedAt: 'desc' },
       skip: query?.skip || 0,
       take: query?.take || 20,
     });
 
     // Get all messages for these chats to find the latest
-    const chatRemoteJids = chats.map((c) => c.remoteJid);
     const messages = await this.prismaRepository.message.findMany({
       where: {
         instanceId: this.instanceId,
-        ...(chatRemoteJids.length > 0 && {
-          key: {
-            path: ['remoteJid'],
-            in: chatRemoteJids,
-          },
-        }),
         ...(timestampGte && timestampLte && {
           messageTimestamp: {
             gte: timestampGte,
@@ -768,33 +757,32 @@ export class ChannelStartupService {
 
     // Map results to expected format
     const mappedResults = chats.map((chat) => {
-      // Find latest message for this chat
+      // Find latest message for this chat by parsing key JSON
       const lastMessage = messages.find((m) => {
         try {
-          const msgRemoteJid = typeof m.key === 'string' ? JSON.parse(m.key)?.remoteJid : m.key?.remoteJid;
-          return msgRemoteJid === chat.remoteJid;
+          const msgKey = typeof m.key === 'string' ? JSON.parse(m.key) : m.key;
+          return msgKey?.remoteJid === chat.remoteJid;
         } catch {
           return false;
         }
       });
 
-      const msgKey = lastMessage?.key ? (typeof lastMessage.key === 'string' ? JSON.parse(lastMessage.key) : lastMessage.key) : null;
       const now = new Date();
       const windowExpires = chat.createdAt ? new Date(chat.createdAt.getTime() + 24 * 60 * 60 * 1000) : now;
       const windowActive = windowExpires > now;
 
       return {
-        id: chat.Contact?.[0]?.id || null,
+        id: chat.id,
         remoteJid: chat.remoteJid,
-        pushName: chat.name || chat.Contact?.[0]?.pushName || null,
-        profilePicUrl: chat.Contact?.[0]?.profilePicUrl || null,
-        updatedAt: lastMessage?.updatedAt || chat.updatedAt,
+        pushName: chat.name || null,
+        profilePicUrl: null,
+        updatedAt: chat.updatedAt || new Date(),
         windowStart: chat.createdAt,
         windowExpires,
         windowActive,
         lastMessage: lastMessage ? this.cleanMessageData(lastMessage) : undefined,
         unreadCount: chat.unreadMessages || 0,
-        isSaved: !!chat.Contact?.[0],
+        isSaved: false,
       };
     });
 

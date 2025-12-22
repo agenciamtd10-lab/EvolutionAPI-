@@ -1,0 +1,88 @@
+version: "3.8"
+
+services:
+  api-mysql:
+    container_name: evolution_api_mysql
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      mysql-db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - evolution_instances_mysql:/evolution/instances
+    networks:
+      - evolution-net
+    env_file:
+      - .env.mysql
+    environment:
+      - DATABASE_PROVIDER=mysql
+      - DATABASE_CONNECTION_URI=mysql://evolution:evolution_password@mysql-db:3306/evolution
+      - CACHE_REDIS_URI=redis://redis:6379/6
+    expose:
+      - "8080"
+
+  frontend:
+    container_name: evolution_frontend
+    image: evoapicloud/evolution-manager:latest
+    restart: always
+    ports:
+      - "3000:80"
+    networks:
+      - evolution-net
+
+  redis:
+    container_name: evolution_redis
+    image: redis:latest
+    restart: always
+    command: >
+      redis-server --port 6379 --appendonly yes
+    volumes:
+      - evolution_redis:/data
+    networks:
+      evolution-net:
+        aliases:
+          - evolution-redis
+    expose:
+      - "6379"
+
+  mysql-db:
+    container_name: mysql_evolution_db
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-evolution}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+      MYSQL_USER: ${MYSQL_USERNAME:-evolution}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-evolution_password}
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --max_connections=1000
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - evolution-net
+    expose:
+      - "3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  evolution_instances_mysql:
+  evolution_redis:
+  mysql_data:
+
+networks:
+  evolution-net:
+    name: evolution-net
+    driver: bridge

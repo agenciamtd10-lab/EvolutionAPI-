@@ -661,7 +661,10 @@ export class BaileysStartupService extends ChannelStartupService {
       },
       msgRetryCounterCache: this.msgRetryCounterCache,
       generateHighQualityLinkPreview: true,
-      getMessage: async (key) => (await this.getMessage(key)) as Promise<proto.IMessage>,
+      getMessage: async (key) => {
+        const msg = await this.getMessage(key);
+        return msg as unknown as proto.IMessage;
+      },
       ...browserOptions,
       markOnlineOnConnect: this.localSettings.alwaysOnline,
       retryRequestDelayMs: 350,
@@ -2367,7 +2370,7 @@ export class BaileysStartupService extends ChannelStartupService {
       if (options?.quoted) {
         const m = options?.quoted;
 
-        const msg = m?.message ? m : ((await this.getMessage(m.key, true)) as WAMessage);
+        const msg = m?.message ? m : (await this.getMessage(m.key, true)) as unknown as WAMessage;
 
         if (msg) {
           quoted = msg;
