@@ -522,47 +522,62 @@ export class BaileysStartupService extends ChannelStartupService {
 
   private async getMessage(key: proto.IMessageKey, full = false) {
     try {
-      // Get all messages for this instance and filter by key.id in application
-      const messages = await this.prismaRepository.message.findMany({
-        where: {
-          instanceId: this.instanceId,
-        },
-        take: 100, // Limit to avoid performance issues
-      });
+      // Fetch messages in batches to find the one with matching key.id
+      // Using pagination instead of arbitrary limit to ensure we find the message
+      const pageSize = 100;
+      let pageNumber = 0;
+      const maxPages = 100; // Maximum 10,000 messages to search
 
-      // Filter by key.id (handle both string and object keys)
-      const webMessageInfo = messages.filter((m) => {
-        try {
-          const msgKey = typeof m.key === 'string' ? JSON.parse(m.key) : m.key;
-          return msgKey?.id === key.id;
-        } catch {
-          return false;
+      while (pageNumber < maxPages) {
+        const messages = await this.prismaRepository.message.findMany({
+          where: {
+            instanceId: this.instanceId,
+          },
+          skip: pageNumber * pageSize,
+          take: pageSize,
+          orderBy: { createdAt: 'desc' }, // Most recent first
+        });
+
+        if (messages.length === 0) {
+          break; // No more messages
         }
-      });
 
-      if (!webMessageInfo[0]) {
-        return { conversation: '' };
-      }
+        // Filter by key.id (handle both string and object keys)
+        const webMessageInfo = messages.find((m) => {
+          try {
+            const msgKey = typeof m.key === 'string' ? JSON.parse(m.key) : m.key;
+            return msgKey?.id === key.id;
+          } catch {
+            return false;
+          }
+        });
 
-      if (full) {
-        return webMessageInfo[0];
-      }
+        if (webMessageInfo) {
+          if (full) {
+            return webMessageInfo;
+          }
 
-      const msg = webMessageInfo[0].message;
-      if (msg && typeof msg === 'object' && 'pollCreationMessage' in msg) {
-        const messageSecretBase64 = (msg as any).messageContextInfo?.messageSecret;
+          const msg = webMessageInfo.message;
+          if (msg && typeof msg === 'object' && 'pollCreationMessage' in msg) {
+            const messageSecretBase64 = (msg as any).messageContextInfo?.messageSecret;
 
-        if (typeof messageSecretBase64 === 'string') {
-          const messageSecret = Buffer.from(messageSecretBase64, 'base64');
+            if (typeof messageSecretBase64 === 'string') {
+              const messageSecret = Buffer.from(messageSecretBase64, 'base64');
 
-          return {
-            messageContextInfo: { messageSecret },
-            pollCreationMessage: (msg as any).pollCreationMessage,
-          };
+              return {
+                messageContextInfo: { messageSecret },
+                pollCreationMessage: (msg as any).pollCreationMessage,
+              };
+            }
+          }
+
+          return msg;
         }
+
+        pageNumber++;
       }
 
-      return msg;
+      return { conversation: '' };
     } catch {
       return { conversation: '' };
     }
