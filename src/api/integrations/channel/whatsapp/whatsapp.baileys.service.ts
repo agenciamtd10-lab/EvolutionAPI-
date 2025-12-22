@@ -1652,13 +1652,20 @@ export class BaileysStartupService extends ChannelStartupService {
 
             const searchId = originalMessageId || key.id;
 
-            const messages = (await this.prismaRepository.$queryRaw`
-              SELECT * FROM "Message"
-              WHERE "instanceId" = ${this.instanceId}
-              AND "key"->>'id' = ${searchId}
-              LIMIT 1
-            `) as any[];
-            findMessage = messages[0] || null;
+            // Find message by filtering in application (compatible with MySQL and PostgreSQL)
+            const allMessages = await this.prismaRepository.message.findMany({
+              where: { instanceId: this.instanceId },
+              take: 100,
+            });
+            const targetMsg = allMessages.find((m: any) => {
+              try {
+                const msgKey = typeof m.key === 'string' ? JSON.parse(m.key) : m.key;
+                return msgKey?.id === searchId;
+              } catch {
+                return false;
+              }
+            });
+            findMessage = targetMsg || null;
 
             if (!findMessage?.id) {
               this.logger.warn(`Original message not found for update. Skipping. Key: ${JSON.stringify(key)}`);
