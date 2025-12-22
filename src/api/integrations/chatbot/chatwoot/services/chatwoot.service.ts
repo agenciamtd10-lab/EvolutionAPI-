@@ -1617,18 +1617,39 @@ export class ChatwootService {
       return;
     }
 
-    // Use raw SQL to avoid JSON path issues
-    const result = await this.prismaRepository.$executeRaw`
-      UPDATE "Message" 
-      SET 
-        "chatwootMessageId" = ${chatwootMessageIds.messageId},
-        "chatwootConversationId" = ${chatwootMessageIds.conversationId},
-        "chatwootInboxId" = ${chatwootMessageIds.inboxId},
-        "chatwootContactInboxSourceId" = ${chatwootMessageIds.contactInboxSourceId},
-        "chatwootIsRead" = ${chatwootMessageIds.isRead || false}
-      WHERE "instanceId" = ${instance.instanceId} 
-      AND "key"->>'id' = ${key.id}
-    `;
+    // Find messages by filtering in application (compatible with both MySQL and PostgreSQL)
+    const messages = await this.prismaRepository.message.findMany({
+      where: {
+        instanceId: instance.instanceId,
+      },
+      take: 100, // Limit to avoid performance issues
+    });
+
+    // Filter by key.id
+    const targetMessages = messages.filter((m) => {
+      try {
+        const msgKey = typeof m.key === 'string' ? JSON.parse(m.key) : m.key;
+        return msgKey?.id === key.id;
+      } catch {
+        return false;
+      }
+    });
+
+    // Update all matching messages
+    let result = 0;
+    for (const msg of targetMessages) {
+      await this.prismaRepository.message.update({
+        where: { id: msg.id },
+        data: {
+          chatwootMessageId: chatwootMessageIds.messageId,
+          chatwootConversationId: chatwootMessageIds.conversationId,
+          chatwootInboxId: chatwootMessageIds.inboxId,
+          chatwootContactInboxSourceId: chatwootMessageIds.contactInboxSourceId,
+          chatwootIsRead: chatwootMessageIds.isRead || false,
+        },
+      });
+      result++;
+    }
 
     this.logger.verbose(`Update result: ${result} rows affected`);
 
@@ -1642,15 +1663,25 @@ export class ChatwootService {
   }
 
   private async getMessageByKeyId(instance: InstanceDto, keyId: string): Promise<MessageModel> {
-    // Use raw SQL query to avoid JSON path issues with Prisma
-    const messages = await this.prismaRepository.$queryRaw`
-      SELECT * FROM "Message" 
-      WHERE "instanceId" = ${instance.instanceId} 
-      AND "key"->>'id' = ${keyId}
-      LIMIT 1
-    `;
+    // Get messages and filter by key.id in application (compatible with both MySQL and PostgreSQL)
+    const messages = await this.prismaRepository.message.findMany({
+      where: {
+        instanceId: instance.instanceId,
+      },
+      take: 100, // Limit to avoid performance issues
+    });
 
-    return (messages as MessageModel[])[0] || null;
+    // Filter by key.id
+    const targetMessage = messages.find((m) => {
+      try {
+        const msgKey = typeof m.key === 'string' ? JSON.parse(m.key) : m.key;
+        return msgKey?.id === keyId;
+      } catch {
+        return false;
+      }
+    });
+
+    return (targetMessage as MessageModel) || null;
   }
 
   private async getReplyToIds(

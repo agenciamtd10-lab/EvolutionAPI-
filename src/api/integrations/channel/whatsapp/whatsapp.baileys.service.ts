@@ -522,32 +522,47 @@ export class BaileysStartupService extends ChannelStartupService {
 
   private async getMessage(key: proto.IMessageKey, full = false) {
     try {
-      // Use raw SQL to avoid JSON path issues
-      const webMessageInfo = (await this.prismaRepository.$queryRaw`
-        SELECT * FROM "Message"
-        WHERE "instanceId" = ${this.instanceId}
-        AND "key"->>'id' = ${key.id}
-      `) as proto.IWebMessageInfo[];
+      // Get all messages for this instance and filter by key.id in application
+      const messages = await this.prismaRepository.message.findMany({
+        where: {
+          instanceId: this.instanceId,
+        },
+        take: 100, // Limit to avoid performance issues
+      });
+
+      // Filter by key.id (handle both string and object keys)
+      const webMessageInfo = messages.filter((m) => {
+        try {
+          const msgKey = typeof m.key === 'string' ? JSON.parse(m.key) : m.key;
+          return msgKey?.id === key.id;
+        } catch {
+          return false;
+        }
+      });
+
+      if (!webMessageInfo[0]) {
+        return { conversation: '' };
+      }
 
       if (full) {
         return webMessageInfo[0];
       }
-      if (webMessageInfo[0].message?.pollCreationMessage) {
-        const messageSecretBase64 = webMessageInfo[0].message?.messageContextInfo?.messageSecret;
+
+      const msg = webMessageInfo[0].message;
+      if (msg && typeof msg === 'object' && 'pollCreationMessage' in msg) {
+        const messageSecretBase64 = (msg as any).messageContextInfo?.messageSecret;
 
         if (typeof messageSecretBase64 === 'string') {
           const messageSecret = Buffer.from(messageSecretBase64, 'base64');
 
-          const msg = {
+          return {
             messageContextInfo: { messageSecret },
-            pollCreationMessage: webMessageInfo[0].message?.pollCreationMessage,
+            pollCreationMessage: (msg as any).pollCreationMessage,
           };
-
-          return msg;
         }
       }
 
-      return webMessageInfo[0].message;
+      return msg;
     } catch {
       return { conversation: '' };
     }
@@ -4734,40 +4749,67 @@ export class BaileysStartupService extends ChannelStartupService {
   private async updateMessagesReadedByTimestamp(remoteJid: string, timestamp?: number): Promise<number> {
     if (timestamp === undefined || timestamp === null) return 0;
 
-    // Use raw SQL to avoid JSON path issues
-    const result = await this.prismaRepository.$executeRaw`
-      UPDATE "Message"
-      SET "status" = ${status[4]}
-      WHERE "instanceId" = ${this.instanceId}
-      AND "key"->>'remoteJid' = ${remoteJid}
-      AND ("key"->>'fromMe')::boolean = false
-      AND "messageTimestamp" <= ${timestamp}
-      AND ("status" IS NULL OR "status" = ${status[3]})
-    `;
+    // Fetch messages and filter by key.remoteJid and fromMe in application
+    const messages = await this.prismaRepository.message.findMany({
+      where: {
+        instanceId: this.instanceId,
+        messageTimestamp: {
+          lte: timestamp,
+        },
+        status: {
+          in: [status[3], null],
+        },
+      },
+    });
 
-    if (result) {
-      if (result > 0) {
-        this.updateChatUnreadMessages(remoteJid);
+    // Filter by remoteJid and fromMe in application
+    const messagesToUpdate = messages.filter((m) => {
+      try {
+        const msgKey = typeof m.key === 'string' ? JSON.parse(m.key) : m.key;
+        return msgKey?.remoteJid === remoteJid && msgKey?.fromMe === false;
+      } catch {
+        return false;
       }
+    });
 
-      return result;
+    // Update all matching messages
+    const result = await Promise.all(
+      messagesToUpdate.map((m) =>
+        this.prismaRepository.message.update({
+          where: { id: m.id },
+          data: { status: status[4] },
+        })
+      )
+    );
+
+    if (result && result.length > 0) {
+      await this.updateChatUnreadMessages(remoteJid);
+      return result.length;
     }
 
     return 0;
   }
 
   private async updateChatUnreadMessages(remoteJid: string): Promise<number> {
-    const [chat, unreadMessages] = await Promise.all([
-      this.prismaRepository.chat.findFirst({ where: { remoteJid } }),
-      // Use raw SQL to avoid JSON path issues
-      this.prismaRepository.$queryRaw`
-        SELECT COUNT(*)::int as count FROM "Message"
-        WHERE "instanceId" = ${this.instanceId}
-        AND "key"->>'remoteJid' = ${remoteJid}
-        AND ("key"->>'fromMe')::boolean = false
-        AND "status" = ${status[3]}
-      `.then((result: any[]) => result[0]?.count || 0),
-    ]);
+    const chat = await this.prismaRepository.chat.findFirst({ where: { remoteJid } });
+
+    // Get unread messages count by filtering in application
+    const messages = await this.prismaRepository.message.findMany({
+      where: {
+        instanceId: this.instanceId,
+        status: status[3],
+      },
+    });
+
+    // Count unread messages for this remoteJid (fromMe = false)
+    const unreadMessages = messages.filter((m) => {
+      try {
+        const msgKey = typeof m.key === 'string' ? JSON.parse(m.key) : m.key;
+        return msgKey?.remoteJid === remoteJid && msgKey?.fromMe === false;
+      } catch {
+        return false;
+      }
+    }).length;
 
     if (chat && chat.unreadMessages !== unreadMessages) {
       await this.prismaRepository.chat.update({ where: { id: chat.id }, data: { unreadMessages } });
@@ -4777,51 +4819,73 @@ export class BaileysStartupService extends ChannelStartupService {
   }
 
   private async addLabel(labelId: string, instanceId: string, chatId: string) {
-    const id = cuid();
+    try {
+      // Get existing chat with labels
+      const chat = await this.prismaRepository.chat.findFirst({
+        where: { id: chatId, instanceId },
+      });
 
-    await this.prismaRepository.$executeRawUnsafe(
-      `INSERT INTO "Chat" ("id", "instanceId", "remoteJid", "labels", "createdAt", "updatedAt")
-       VALUES ($4, $2, $3, to_jsonb(ARRAY[$1]::text[]), NOW(), NOW()) ON CONFLICT ("instanceId", "remoteJid")
-     DO
-      UPDATE
-          SET "labels" = (
-          SELECT to_jsonb(array_agg(DISTINCT elem))
-          FROM (
-          SELECT jsonb_array_elements_text("Chat"."labels") AS elem
-          UNION
-          SELECT $1::text AS elem
-          ) sub
-          ),
-          "updatedAt" = NOW();`,
-      labelId,
-      instanceId,
-      chatId,
-      id,
-    );
+      if (!chat) {
+        return;
+      }
+
+      // Parse existing labels
+      let labels: string[] = [];
+      if (chat.labels) {
+        try {
+          labels = typeof chat.labels === 'string' ? JSON.parse(chat.labels) : (chat.labels as unknown as string[]);
+        } catch {
+          labels = [];
+        }
+      }
+
+      // Add labelId if not already present
+      if (!labels.includes(labelId)) {
+        labels.push(labelId);
+      }
+
+      // Update chat with new labels
+      await this.prismaRepository.chat.update({
+        where: { id: chatId },
+        data: { labels: JSON.stringify(labels), updatedAt: new Date() },
+      });
+    } catch (error) {
+      this.logger.error(`Error adding label: ${error}`);
+    }
   }
 
   private async removeLabel(labelId: string, instanceId: string, chatId: string) {
-    const id = cuid();
+    try {
+      // Get existing chat with labels
+      const chat = await this.prismaRepository.chat.findFirst({
+        where: { id: chatId, instanceId },
+      });
 
-    await this.prismaRepository.$executeRawUnsafe(
-      `INSERT INTO "Chat" ("id", "instanceId", "remoteJid", "labels", "createdAt", "updatedAt")
-       VALUES ($4, $2, $3, '[]'::jsonb, NOW(), NOW()) ON CONFLICT ("instanceId", "remoteJid")
-     DO
-      UPDATE
-          SET "labels" = COALESCE (
-          (
-          SELECT jsonb_agg(elem)
-          FROM jsonb_array_elements_text("Chat"."labels") AS elem
-          WHERE elem <> $1
-          ),
-          '[]'::jsonb
-          ),
-          "updatedAt" = NOW();`,
-      labelId,
-      instanceId,
-      chatId,
-      id,
-    );
+      if (!chat) {
+        return;
+      }
+
+      // Parse existing labels
+      let labels: string[] = [];
+      if (chat.labels) {
+        try {
+          labels = typeof chat.labels === 'string' ? JSON.parse(chat.labels) : (chat.labels as unknown as string[]);
+        } catch {
+          labels = [];
+        }
+      }
+
+      // Remove labelId
+      labels = labels.filter((l) => l !== labelId);
+
+      // Update chat with new labels
+      await this.prismaRepository.chat.update({
+        where: { id: chatId },
+        data: { labels: JSON.stringify(labels), updatedAt: new Date() },
+      });
+    } catch (error) {
+      this.logger.error(`Error removing label: ${error}`);
+    }
   }
 
   public async baileysOnWhatsapp(jid: string) {
