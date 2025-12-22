@@ -535,7 +535,7 @@ export class BaileysStartupService extends ChannelStartupService {
           },
           skip: pageNumber * pageSize,
           take: pageSize,
-          orderBy: { createdAt: 'desc' }, // Most recent first
+          orderBy: { messageTimestamp: 'desc' }, // Most recent first
         });
 
         if (messages.length === 0) {
@@ -1681,7 +1681,7 @@ export class BaileysStartupService extends ChannelStartupService {
                 where: { instanceId: this.instanceId },
                 skip: pageNumber * pageSize,
                 take: pageSize,
-                orderBy: { createdAt: 'desc' }, // Most recent first
+                orderBy: { messageTimestamp: 'desc' }, // Most recent first
               });
 
               if (messages.length === 0) {

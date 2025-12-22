@@ -1631,7 +1631,7 @@ export class ChatwootService {
         },
         skip: pageNumber * pageSize,
         take: pageSize,
-        orderBy: { createdAt: 'desc' }, // Most recent first
+        orderBy: { messageTimestamp: 'desc' }, // Most recent first
       });
 
       if (messages.length === 0) {
