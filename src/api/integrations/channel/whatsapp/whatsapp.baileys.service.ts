@@ -608,9 +608,14 @@ export class BaileysStartupService extends ChannelStartupService {
         try {
           const response = await axios.get(this.localProxy?.host);
           const text = response.data;
-          const proxyUrls = text.split('\r\n');
+          const proxyUrls = text.split('\r\n').filter(Boolean);
           const rand = Math.floor(Math.random() * Math.floor(proxyUrls.length));
-          const proxyUrl = 'http://' + proxyUrls[rand];
+          let proxyUrl = proxyUrls[rand];
+          // Si la línea ya tiene protocolo, úsala tal cual. Si no, anteponer el protocolo configurado
+          if (!/^\w+:\/\//.test(proxyUrl)) {
+            const proto = this.localProxy?.protocol?.replace(':', '') || 'http';
+            proxyUrl = `${proto}://${proxyUrl}`;
+          }
           options = { agent: makeProxyAgent(proxyUrl), fetchAgent: makeProxyAgentUndici(proxyUrl) };
         } catch {
           this.localProxy.enabled = false;
