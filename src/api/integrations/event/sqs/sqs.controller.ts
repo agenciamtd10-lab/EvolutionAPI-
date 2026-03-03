@@ -28,8 +28,8 @@ export class SqsController extends EventController implements EventControllerInt
         accessKeyId: awsConfig.ACCESS_KEY_ID,
         secretAccessKey: awsConfig.SECRET_ACCESS_KEY,
       },
-
       region: awsConfig.REGION,
+      endpoint: awsConfig.ENDPOINT || undefined,
     });
 
     this.logger.info('SQS initialized');
@@ -126,7 +126,9 @@ export class SqsController extends EventController implements EventControllerInt
             ? 'singlequeue'
             : `${event.replace('.', '_').toLowerCase()}`;
         const queueName = `${prefixName}_${eventFormatted}.fifo`;
-        const sqsUrl = `https://sqs.${sqsConfig.REGION}.amazonaws.com/${sqsConfig.ACCOUNT_ID}/${queueName}`;
+        const sqsUrl = sqsConfig.ENDPOINT
+          ? `${sqsConfig.ENDPOINT.replace(/\/$/, '')}/${sqsConfig.ACCOUNT_ID}/${queueName}`
+          : `https://sqs.${sqsConfig.REGION}.amazonaws.com/${sqsConfig.ACCOUNT_ID}/${queueName}`;
 
         const message = {
           ...(extra ?? {}),

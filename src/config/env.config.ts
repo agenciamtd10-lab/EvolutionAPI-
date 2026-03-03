@@ -121,6 +121,7 @@ export type Sqs = {
   SECRET_ACCESS_KEY: string;
   ACCOUNT_ID: string;
   REGION: string;
+  ENDPOINT: string;
   MAX_PAYLOAD_SIZE: number;
   EVENTS: {
     APPLICATION_STARTUP: boolean;
@@ -585,6 +586,7 @@ export class ConfigService {
         SECRET_ACCESS_KEY: process.env.SQS_SECRET_ACCESS_KEY || '',
         ACCOUNT_ID: process.env.SQS_ACCOUNT_ID || '',
         REGION: process.env.SQS_REGION || '',
+        ENDPOINT: process.env.SQS_ENDPOINT || '',
         MAX_PAYLOAD_SIZE: Number.parseInt(process.env.SQS_MAX_PAYLOAD_SIZE ?? '1048576'),
         EVENTS: {
           APPLICATION_STARTUP: process.env?.SQS_GLOBAL_APPLICATION_STARTUP === 'true',
