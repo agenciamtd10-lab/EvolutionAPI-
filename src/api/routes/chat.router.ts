@@ -3,6 +3,7 @@ import {
   ArchiveChatDto,
   BlockUserDto,
   DeleteMessage,
+  FetchGroupHistoryDto,
   getBase64FromMediaMessageDto,
   MarkChatUnreadDto,
   NumberDto,
@@ -11,6 +12,7 @@ import {
   ProfilePictureDto,
   ProfileStatusDto,
   ReadMessageDto,
+  RetryMediaFromMetadataDto,
   SendPresenceDto,
   UpdateMessageDto,
   WhatsAppNumberDto,
@@ -119,6 +121,26 @@ export class ChatRouter extends RouterBroker {
         });
 
         return res.status(HttpStatus.CREATED).json(response);
+      })
+      .post(this.routerPath('retryMediaFromMetadata'), ...guards, async (req, res) => {
+        const response = await this.dataValidate<RetryMediaFromMetadataDto>({
+          request: req,
+          schema: null,
+          ClassRef: RetryMediaFromMetadataDto,
+          execute: (instance, data) => chatController.retryMediaFromMetadata(instance, data),
+        });
+
+        return res.status(HttpStatus.CREATED).json(response);
+      })
+      .post(this.routerPath('fetchGroupHistory'), ...guards, async (req, res) => {
+        const response = await this.dataValidate<FetchGroupHistoryDto>({
+          request: req,
+          schema: null,
+          ClassRef: FetchGroupHistoryDto,
+          execute: (instance, data) => chatController.fetchGroupHistory(instance, data),
+        });
+
+        return res.status(HttpStatus.OK).json(response);
       })
       // TODO: corrigir updateMessage para medias tambem
       .post(this.routerPath('updateMessage'), ...guards, async (req, res) => {

@@ -4,8 +4,10 @@ import {
   ArchiveChatDto,
   BlockUserDto,
   DeleteMessage,
+  FetchGroupHistoryDto,
   getBase64FromMediaMessageDto,
   LastMessage,
+  RetryMediaFromMetadataDto,
   MarkChatUnreadDto,
   NumberBusiness,
   OnWhatsAppDto,
@@ -5157,6 +5159,140 @@ export class BaileysStartupService extends ChannelStartupService {
         currentPage: query.page,
         records: formattedMessages,
       },
+    };
+  }
+
+  /**
+   * Retry media download using caller-supplied metadata (mediaKey base64, directPath, url).
+   * Does NOT require the message to exist in EA's own DB — mirrors OwnPilot retryMediaFromMetadata().
+   *
+   * Algorithm (same as OwnPilot):
+   *   1. Reconstruct minimal WAMessage from provided metadata
+   *   2. Try direct downloadMediaMessage (fast-path for valid CDN)
+   *   3. If expired → explicit updateMediaMessage [30s timeout] → retry download
+   */
+  public async retryMediaFromMetadata(data: RetryMediaFromMetadataDto, getBuffer = false) {
+    if (!this.client || this.connectionStatus?.state !== 'open') {
+      throw new BadRequestException('WhatsApp is not connected');
+    }
+
+    const {
+      messageId, remoteJid, participant, fromMe = false,
+      mediaKey, directPath, url, mimeType, filename, fileLength, convertToMp4 = false,
+    } = data;
+
+    // Reconstruct WAMessage proto from caller-supplied metadata
+    const mediaKeyBytes = new Uint8Array(Buffer.from(mediaKey, 'base64'));
+    const reconstructedMsg = {
+      key: { id: messageId, remoteJid, fromMe, participant },
+      message: {
+        documentMessage: {
+          url,
+          directPath,
+          mediaKey: mediaKeyBytes,
+          mimetype: mimeType ?? 'application/octet-stream',
+          fileName: filename,
+          fileLength: fileLength != null ? BigInt(fileLength) as any : undefined,
+        },
+      },
+    };
+
+    let buffer: Buffer;
+
+    // Step 1: direct download
+    try {
+      buffer = await downloadMediaMessage(
+        reconstructedMsg as any,
+        'buffer',
+        {},
+        { logger: P({ level: 'error' }) as any, reuploadRequest: this.client.updateMediaMessage },
+      );
+      this.logger.log(`[retryMediaFromMetadata] Direct download success msgId=${messageId} size=${buffer?.length}`);
+    } catch {
+      // Step 2: explicit updateMediaMessage (Baileys RC9 bug workaround — same as getBase64FromMediaMessage)
+      this.logger.error(`[retryMediaFromMetadata] Direct download failed for msgId=${messageId}, requesting re-upload...`);
+      try {
+        const updatedMsg = await Promise.race([
+          this.client.updateMediaMessage(reconstructedMsg as any),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('updateMediaMessage timed out — sender offline')), 30_000),
+          ),
+        ]);
+        buffer = await downloadMediaMessage(
+          updatedMsg,
+          'buffer',
+          {},
+          { logger: P({ level: 'error' }) as any, reuploadRequest: this.client.updateMediaMessage },
+        );
+        this.logger.log(`[retryMediaFromMetadata] Re-upload success msgId=${messageId} size=${buffer?.length}`);
+      } catch (err: any) {
+        throw new BadRequestException(`Media recovery failed for msgId=${messageId}: ${err?.message}`);
+      }
+    }
+
+    if (!buffer) throw new BadRequestException(`Empty buffer for msgId=${messageId}`);
+
+    if (convertToMp4 && mimeType?.includes('audio')) {
+      try {
+        const mp4 = await this.processAudioMp4(buffer.toString('base64'));
+        const mp4Str = Buffer.isBuffer(mp4) ? (mp4 as Buffer).toString('base64') : (mp4 as string);
+        return getBuffer ? Buffer.from(mp4Str, 'base64') : { base64: mp4Str, mimetype: 'video/mp4', filename };
+      } catch { /* fall through to raw */ }
+    }
+
+    const base64 = buffer.toString('base64');
+    return getBuffer ? buffer : { base64, mimetype: mimeType, filename };
+  }
+
+  /**
+   * Trigger on-demand WhatsApp history sync for a group.
+   * WhatsApp responds with old message protos — including fresh mediaKey + directPath —
+   * which are then stored in EA's Message table via messaging-history.set event.
+   * This is how OwnPilot recovers mediaKeys for old messages not in EA's DB.
+   *
+   * Rate-limited: 1 call per 30 seconds (WhatsApp ban risk).
+   */
+  private _lastHistoryFetchTime = 0;
+
+  public async fetchGroupHistory(data: FetchGroupHistoryDto) {
+    if (!this.client || this.connectionStatus?.state !== 'open') {
+      throw new BadRequestException('WhatsApp is not connected');
+    }
+
+    const { groupJid, count = 50, anchorMessageId, anchorTimestamp, anchorFromMe = false, anchorParticipant } = data;
+
+    if (!groupJid.endsWith('@g.us')) {
+      throw new BadRequestException('groupJid must end with @g.us');
+    }
+
+    const now = Date.now();
+    if (now - this._lastHistoryFetchTime < 30_000) {
+      const waitSec = Math.ceil((30_000 - (now - this._lastHistoryFetchTime)) / 1000);
+      throw new BadRequestException(`Rate limited — wait ${waitSec}s before next fetchGroupHistory`);
+    }
+    this._lastHistoryFetchTime = now;
+
+    const safeCount = Math.min(Math.max(count, 1), 50);
+    const anchorKey = {
+      remoteJid: groupJid,
+      fromMe: anchorFromMe,
+      id: anchorMessageId ?? '',
+      participant: anchorParticipant,
+    };
+    const anchorTs = anchorTimestamp ?? 0;
+
+    const sessionId = await this.client.fetchMessageHistory(safeCount, anchorKey, anchorTs);
+
+    this.logger.log(
+      `[fetchGroupHistory] Requested ${safeCount} messages for ${groupJid} ` +
+      `anchorId=${anchorKey.id || 'none'} anchorTs=${anchorTs} sessionId=${sessionId}`,
+    );
+
+    return {
+      sessionId,
+      groupJid,
+      count: safeCount,
+      message: 'History sync requested. WhatsApp will deliver messages via messaging-history.set event (async).',
     };
   }
 }

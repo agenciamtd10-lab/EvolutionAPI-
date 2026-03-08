@@ -2,6 +2,7 @@ import {
   ArchiveChatDto,
   BlockUserDto,
   DeleteMessage,
+  FetchGroupHistoryDto,
   getBase64FromMediaMessageDto,
   MarkChatUnreadDto,
   NumberDto,
@@ -10,6 +11,7 @@ import {
   ProfilePictureDto,
   ProfileStatusDto,
   ReadMessageDto,
+  RetryMediaFromMetadataDto,
   SendPresenceDto,
   UpdateMessageDto,
   WhatsAppNumberDto,
@@ -56,6 +58,14 @@ export class ChatController {
 
   public async getBase64FromMediaMessage({ instanceName }: InstanceDto, data: getBase64FromMediaMessageDto) {
     return await this.waMonitor.waInstances[instanceName].getBase64FromMediaMessage(data);
+  }
+
+  public async retryMediaFromMetadata({ instanceName }: InstanceDto, data: RetryMediaFromMetadataDto) {
+    return await this.waMonitor.waInstances[instanceName].retryMediaFromMetadata(data);
+  }
+
+  public async fetchGroupHistory({ instanceName }: InstanceDto, data: FetchGroupHistoryDto) {
+    return await this.waMonitor.waInstances[instanceName].fetchGroupHistory(data);
   }
 
   public async fetchMessages({ instanceName }: InstanceDto, query: Query<Message>) {

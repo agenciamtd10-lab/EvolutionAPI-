@@ -127,3 +127,26 @@ export class BlockUserDto {
   number: string;
   status: 'block' | 'unblock';
 }
+
+export class RetryMediaFromMetadataDto {
+  messageId: string;
+  remoteJid: string;
+  participant?: string;
+  fromMe?: boolean;
+  mediaKey: string;      // base64-encoded
+  directPath: string;
+  url: string;
+  mimeType?: string;
+  filename?: string;
+  fileLength?: number;
+  convertToMp4?: boolean;
+}
+
+export class FetchGroupHistoryDto {
+  groupJid: string;
+  count?: number;          // default 50, max 50
+  anchorMessageId?: string;
+  anchorTimestamp?: number;
+  anchorFromMe?: boolean;
+  anchorParticipant?: string;
+}
