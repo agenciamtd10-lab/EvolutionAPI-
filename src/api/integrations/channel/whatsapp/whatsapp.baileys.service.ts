@@ -3889,8 +3889,21 @@ export class BaileysStartupService extends ChannelStartupService {
         }
       }
 
-      if (typeof mediaMessage['mediaKey'] === 'object') {
-        msg.message[mediaType].mediaKey = Uint8Array.from(Object.values(mediaMessage['mediaKey']));
+      if (typeof mediaMessage['mediaKey'] === 'string') {
+        // base64-encoded string (e.g. from HTTP request body) → Uint8Array
+        // This matches OwnPilot retryMediaFromMetadata: new Uint8Array(Buffer.from(base64, 'base64'))
+        msg.message[mediaType].mediaKey = new Uint8Array(Buffer.from(mediaMessage['mediaKey'], 'base64'));
+      } else if (
+        typeof mediaMessage['mediaKey'] === 'object' &&
+        !Buffer.isBuffer(mediaMessage['mediaKey']) &&
+        !(mediaMessage['mediaKey'] instanceof Uint8Array)
+      ) {
+        // Plain object {0:b0, 1:b1, ...} from PostgreSQL JSONB deserialization.
+        // CRITICAL: JSONB stores keys lexicographically ("0","1","10","11",...,"2",...,"9")
+        // so Object.values() gives WRONG byte order. Must sort keys numerically first.
+        const keyObj = mediaMessage['mediaKey'] as Record<string, number>;
+        const sortedKeys = Object.keys(keyObj).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+        msg.message[mediaType].mediaKey = new Uint8Array(sortedKeys.map((k) => keyObj[k]));
       }
 
       let buffer: Buffer;
