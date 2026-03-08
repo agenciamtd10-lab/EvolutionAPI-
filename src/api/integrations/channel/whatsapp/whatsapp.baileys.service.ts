@@ -3903,30 +3903,57 @@ export class BaileysStartupService extends ChannelStartupService {
           { logger: P({ level: 'error' }) as any, reuploadRequest: this.client.updateMediaMessage },
         );
       } catch {
-        this.logger.error('Download Media failed, trying to retry in 5 seconds...');
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        const mediaType = Object.keys(msg.message).find((key) => key.endsWith('Message'));
-        if (!mediaType) throw new Error('Could not determine mediaType for fallback');
+        this.logger.error('Download Media failed, attempting explicit updateMediaMessage (Baileys RC9 reuploadRequest bug workaround)...');
 
+        // Baileys RC9 bug: reuploadRequest callback never triggers because downloadMediaMessage
+        // checks error.status but Boom sets output.statusCode — so the automatic re-upload path
+        // is dead code. Fix: explicitly call updateMediaMessage to get a fresh CDN URL,
+        // then retry the download. This mirrors the technique used in OwnPilot retryMediaFromMetadata().
         try {
-          const media = await downloadContentFromMessage(
-            {
-              mediaKey: msg.message?.[mediaType]?.mediaKey,
-              directPath: msg.message?.[mediaType]?.directPath,
-              url: `https://mmg.whatsapp.net${msg?.message?.[mediaType]?.directPath}`,
-            },
-            await this.mapMediaType(mediaType),
+          const REUPLOAD_TIMEOUT_MS = 30_000;
+          this.logger.info('Requesting media re-upload from sender device via updateMediaMessage...');
+          const updatedMsg = await Promise.race([
+            this.client.updateMediaMessage({ key: msg.key, message: msg.message }),
+            new Promise<never>((_, reject) =>
+              setTimeout(
+                () => reject(new Error('updateMediaMessage timed out after 30s — sender device may be offline')),
+                REUPLOAD_TIMEOUT_MS,
+              ),
+            ),
+          ]);
+          buffer = await downloadMediaMessage(
+            updatedMsg,
+            'buffer',
             {},
+            { logger: P({ level: 'error' }) as any, reuploadRequest: this.client.updateMediaMessage },
           );
-          const chunks = [];
-          for await (const chunk of media) {
-            chunks.push(chunk);
+          this.logger.info('Download Media successful after explicit updateMediaMessage!');
+        } catch (reuploadErr) {
+          this.logger.error(`updateMediaMessage failed: ${reuploadErr?.message} — falling back to downloadContentFromMessage...`);
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          const mediaType = Object.keys(msg.message).find((key) => key.endsWith('Message'));
+          if (!mediaType) throw new Error('Could not determine mediaType for fallback');
+
+          try {
+            const media = await downloadContentFromMessage(
+              {
+                mediaKey: msg.message?.[mediaType]?.mediaKey,
+                directPath: msg.message?.[mediaType]?.directPath,
+                url: `https://mmg.whatsapp.net${msg?.message?.[mediaType]?.directPath}`,
+              },
+              await this.mapMediaType(mediaType),
+              {},
+            );
+            const chunks = [];
+            for await (const chunk of media) {
+              chunks.push(chunk);
+            }
+            buffer = Buffer.concat(chunks);
+            this.logger.info('Download Media with downloadContentFromMessage was successful!');
+          } catch (fallbackErr) {
+            this.logger.error('Download Media with downloadContentFromMessage also failed!');
+            throw fallbackErr;
           }
-          buffer = Buffer.concat(chunks);
-          this.logger.info('Download Media with downloadContentFromMessage was successful!');
-        } catch (fallbackErr) {
-          this.logger.error('Download Media with downloadContentFromMessage also failed!');
-          throw fallbackErr;
         }
       }
       const typeMessage = getContentType(msg.message);
