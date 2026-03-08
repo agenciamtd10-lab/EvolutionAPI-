@@ -1,6 +1,7 @@
 import { RouterBroker } from '@api/abstract/abstract.router';
 import {
   ArchiveChatDto,
+  BatchRecoverMediaDto,
   BlockUserDto,
   DeleteMessage,
   FetchGroupHistoryDto,
@@ -138,6 +139,16 @@ export class ChatRouter extends RouterBroker {
           schema: null,
           ClassRef: FetchGroupHistoryDto,
           execute: (instance, data) => chatController.fetchGroupHistory(instance, data),
+        });
+
+        return res.status(HttpStatus.OK).json(response);
+      })
+      .post(this.routerPath('batchRecoverMedia'), ...guards, async (req, res) => {
+        const response = await this.dataValidate<BatchRecoverMediaDto>({
+          request: req,
+          schema: null,
+          ClassRef: BatchRecoverMediaDto,
+          execute: (instance, data) => chatController.batchRecoverMedia(instance, data),
         });
 
         return res.status(HttpStatus.OK).json(response);

@@ -1,5 +1,6 @@
 import {
   ArchiveChatDto,
+  BatchRecoverMediaDto,
   BlockUserDto,
   DeleteMessage,
   FetchGroupHistoryDto,
@@ -66,6 +67,10 @@ export class ChatController {
 
   public async fetchGroupHistory({ instanceName }: InstanceDto, data: FetchGroupHistoryDto) {
     return await this.waMonitor.waInstances[instanceName].fetchGroupHistory(data);
+  }
+
+  public async batchRecoverMedia({ instanceName }: InstanceDto, data: BatchRecoverMediaDto) {
+    return await this.waMonitor.waInstances[instanceName].batchRecoverMedia(data);
   }
 
   public async fetchMessages({ instanceName }: InstanceDto, query: Query<Message>) {

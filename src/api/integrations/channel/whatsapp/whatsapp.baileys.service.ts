@@ -2,6 +2,7 @@ import { getCollectionsDto } from '@api/dto/business.dto';
 import { OfferCallDto } from '@api/dto/call.dto';
 import {
   ArchiveChatDto,
+  BatchRecoverMediaDto,
   BlockUserDto,
   DeleteMessage,
   FetchGroupHistoryDto,
@@ -5294,5 +5295,130 @@ export class BaileysStartupService extends ChannelStartupService {
       count: safeCount,
       message: 'History sync requested. WhatsApp will deliver messages via messaging-history.set event (async).',
     };
+  }
+
+  /**
+   * Batch media recovery pipeline — mirrors OwnPilot's recover-media endpoint.
+   *
+   * For each messageId:
+   *   1. Fetch metadata (mediaKey, directPath, url, mimeType, fileName) from EA's Message table
+   *   2. Call retryMediaFromMetadata (direct download → on fail: updateMediaMessage + retry)
+   *   3. If S3 enabled and storeToMinIO=true:
+   *      a. Upload buffer to MinIO (same path structure as regular media handler)
+   *      b. Upsert prismaRepository.media record
+   *      c. Update message.mediaUrl in DB
+   *
+   * This makes EA self-sufficient for expired CDN recovery without external orchestrators.
+   */
+  public async batchRecoverMedia(data: BatchRecoverMediaDto) {
+    const { messageIds, continueOnError = true, storeToMinIO = true } = data;
+
+    if (!messageIds?.length) throw new BadRequestException('messageIds array is required and must not be empty');
+
+    const s3Enabled = this.configService.get<S3>('S3').ENABLE;
+    const results: Array<{ messageId: string; status: 'ok' | 'skip' | 'error'; mediaUrl?: string; error?: string }> = [];
+
+    for (const msgKeyId of messageIds) {
+      try {
+        // Step 1: Fetch message metadata from DB
+        const dbMsg = await this.prismaRepository.message.findFirst({
+          where: { key: { path: ['id'], equals: msgKeyId }, instanceId: this.instanceId },
+        });
+
+        if (!dbMsg) {
+          results.push({ messageId: msgKeyId, status: 'skip', error: 'Message not found in DB' });
+          continue;
+        }
+
+        const msgContent: any = typeof dbMsg.message === 'object' && dbMsg.message !== null ? dbMsg.message : {};
+        const doc = msgContent.documentMessage ?? msgContent.imageMessage ?? msgContent.videoMessage
+          ?? msgContent.audioMessage ?? msgContent.stickerMessage;
+
+        if (!doc?.mediaKey || !doc?.directPath) {
+          results.push({ messageId: msgKeyId, status: 'skip', error: 'No mediaKey/directPath in message' });
+          continue;
+        }
+
+        // Skip if already has a MinIO mediaUrl (already recovered)
+        if (doc.mediaUrl && !doc.mediaUrl.includes('mmg.whatsapp.net')) {
+          results.push({ messageId: msgKeyId, status: 'skip', error: 'Already stored in MinIO' });
+          continue;
+        }
+
+        const key: any = typeof dbMsg.key === 'object' && dbMsg.key !== null ? dbMsg.key : {};
+        const mimeType: string = doc.mimetype ?? 'application/octet-stream';
+        const filename: string = doc.fileName ?? doc.title ?? `${msgKeyId}.bin`;
+
+        // Step 2: Download (with expired URL recovery)
+        const buffer = await this.retryMediaFromMetadata(
+          {
+            messageId: msgKeyId,
+            remoteJid: key.remoteJid ?? '',
+            participant: key.participant,
+            fromMe: key.fromMe ?? false,
+            mediaKey: typeof doc.mediaKey === 'string' ? doc.mediaKey
+              : Buffer.from(Object.keys(doc.mediaKey).sort((a, b) => parseInt(a) - parseInt(b)).map((k) => doc.mediaKey[k])).toString('base64'),
+            directPath: doc.directPath,
+            url: doc.url ?? '',
+            mimeType,
+            filename,
+          },
+          true, // getBuffer=true
+        ) as Buffer;
+
+        if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+          results.push({ messageId: msgKeyId, status: 'error', error: 'Empty buffer returned' });
+          if (!continueOnError) break;
+          continue;
+        }
+
+        // Step 3: Upload to MinIO + update DB
+        if (s3Enabled && storeToMinIO) {
+          const mediaType = 'document';
+          const fullName = join(
+            `${this.instance.id}`,
+            key.remoteJid ?? 'unknown',
+            mediaType,
+            `${Date.now()}_${filename}`,
+          );
+
+          await s3Service.uploadFile(fullName, buffer, buffer.length, { 'Content-Type': mimeType });
+
+          // Upsert media record
+          const existingMedia = await this.prismaRepository.media.findFirst({
+            where: { messageId: dbMsg.id, instanceId: this.instanceId },
+          });
+          if (!existingMedia) {
+            await this.prismaRepository.media.create({
+              data: { messageId: dbMsg.id, instanceId: this.instanceId, type: mediaType, fileName: fullName, mimetype: mimeType },
+            });
+          }
+
+          // Update message.mediaUrl so future reads skip re-download
+          const mediaUrl = await s3Service.getObjectUrl(fullName);
+          const updatedContent = { ...msgContent };
+          const docKey = Object.keys(updatedContent).find((k) => k.endsWith('Message'));
+          if (docKey) updatedContent[docKey] = { ...updatedContent[docKey], mediaUrl };
+          await this.prismaRepository.message.update({ where: { id: dbMsg.id }, data: { message: updatedContent } });
+
+          this.logger.log(`[batchRecoverMedia] ✓ ${filename} → MinIO: ${fullName} (${buffer.length} bytes)`);
+          results.push({ messageId: msgKeyId, status: 'ok', mediaUrl });
+        } else {
+          // S3 disabled — just report size
+          this.logger.log(`[batchRecoverMedia] ✓ ${filename} downloaded (${buffer.length} bytes, S3 disabled)`);
+          results.push({ messageId: msgKeyId, status: 'ok' });
+        }
+      } catch (err: any) {
+        this.logger.error(`[batchRecoverMedia] ✗ ${msgKeyId}: ${err?.message}`);
+        results.push({ messageId: msgKeyId, status: 'error', error: err?.message });
+        if (!continueOnError) break;
+      }
+    }
+
+    const ok = results.filter((r) => r.status === 'ok').length;
+    const skip = results.filter((r) => r.status === 'skip').length;
+    const error = results.filter((r) => r.status === 'error').length;
+
+    return { total: messageIds.length, ok, skip, error, results };
   }
 }

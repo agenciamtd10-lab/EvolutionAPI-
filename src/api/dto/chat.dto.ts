@@ -150,3 +150,12 @@ export class FetchGroupHistoryDto {
   anchorFromMe?: boolean;
   anchorParticipant?: string;
 }
+
+export class BatchRecoverMediaDto {
+  /** List of WhatsApp message key IDs to recover */
+  messageIds: string[];
+  /** Continue processing remaining messages on individual failure (default: true) */
+  continueOnError?: boolean;
+  /** Upload recovered buffer to MinIO and update DB mediaUrl (default: true, requires S3 enabled) */
+  storeToMinIO?: boolean;
+}
