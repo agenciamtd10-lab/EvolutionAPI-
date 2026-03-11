@@ -607,7 +607,11 @@ export class EvolutionStartupService extends ChannelStartupService {
   }
 
   public async mediaMessage(data: SendMediaDto, file?: any, isIntegration = false) {
-    const mediaData: SendMediaDto = { ...data };
+    const mediaData: SendMediaDto = {
+      ...data,
+      // Normalize filename to fileName (handle case-insensitivity)
+      fileName: data.fileName || (data as any).filename,
+    };
 
     if (file) mediaData.media = file.buffer.toString('base64');
 
