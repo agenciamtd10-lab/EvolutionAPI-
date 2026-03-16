@@ -164,13 +164,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://evolution-evolution-api.rcxmr5.easypanel.host/message/sendText/Teste",
+        "url": "https://n8n-evolution-api.xeq31m.easypanel.host/message/sendText/Clarice",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "apikey",
-              "value": "BE670335A833-4FE4-84CB-29FA65A8ED73"
+              "value": "SUA_APIKEY_AQUI"
             },
             {
               "name": "Content-Type",
@@ -285,7 +285,7 @@
       ],
       "credentials": {
         "anthropicApi": {
-          "id": "7WwG495lbMecbH5G",
+          "id": "SEU_ID_ANTHROPIC_AQUI",
           "name": "Anthropic API"
         }
       }
@@ -353,13 +353,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://evolution-evolution-api.rcxmr5.easypanel.host/message/sendText/Teste",
+        "url": "https://n8n-evolution-api.xeq31m.easypanel.host/message/sendText/Clarice",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "apikey",
-              "value": "BE670335A833-4FE4-84CB-29FA65A8ED73"
+              "value": "SUA_APIKEY_AQUI"
             },
             {
               "name": "Content-Type",
