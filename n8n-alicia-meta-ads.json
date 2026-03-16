@@ -1,0 +1,659 @@
+{
+  "name": "Alicia - Meta Ads v2 (Clientes + Relatórios)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "alicia-whatsapp",
+        "options": {}
+      },
+      "id": "7623fe0f-091f-4cde-a0ff-7b53998c4fe1",
+      "name": "Webhook Evolution API",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -336,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Suporta webhook typeVersion 1 (body direto) e typeVersion 2 (body aninhado)\nconst raw = $input.first().json;\nconst payload = (raw.body && typeof raw.body === 'object' && raw.body !== null) ? raw.body : raw;\n\n// Ignora eventos que nao sao mensagens recebidas (connection.update, read receipts, etc)\nconst event = payload.event || '';\nif (event !== '' && event !== 'messages.upsert') return [];\n\nconst data = payload.data || {};\nconst key = data.key || {};\nconst msg = data.message || {};\n\nconst text =\n  msg.conversation ||\n  (msg.extendedTextMessage && msg.extendedTextMessage.text) ||\n  (msg.imageMessage && msg.imageMessage.caption) ||\n  (msg.videoMessage && msg.videoMessage.caption) ||\n  (msg.documentMessage && msg.documentMessage.caption) ||\n  '';\n\nconst remoteJid = key.remoteJid || '';\nconst fromMe = key.fromMe === true;\nconst instance = payload.instance || 'Teste';\n\nif (fromMe) return [];\nif (!text.trim()) return [];\nif (remoteJid.includes('@g.us')) return [];\n\nconst phone = remoteJid\n  .replace('@s.whatsapp.net', '')\n  .replace('@c.us', '');\n\nreturn [{ json: { text: text.trim(), phone: phone, remoteJid: remoteJid, instance: instance } }];"
+      },
+      "id": "24a967e7-7602-4f55-bea1-a4dff46d1330",
+      "name": "Parse Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -112,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-alicia",
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "alicia",
+              "operator": {
+                "type": "string",
+                "operation": "contains",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "accdd347-7076-4d05-b4c7-ae43aa1fc4b7",
+      "name": "Menciona Alicia?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        112,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst text = (input.text || '').toLowerCase();\nconst now = new Date();\nconst fmt = d => d.toISOString().split('T')[0];\nconst addDays = (n) => { const d = new Date(now); d.setDate(d.getDate() + n); return fmt(d); };\nconst dow = now.getDay();\nconst daysToMon = dow === 0 ? 6 : dow - 1;\nconst monday = new Date(now);\nmonday.setDate(now.getDate() - daysToMon);\n\n// clientMap como array para evitar chave duplicada e suportar multiplos aliases\nconst clientMap = [\n  { keys: ['antonio neto', 'antonio'], id: 'act_497795903676192', nome: 'Antonio Neto' },\n  { keys: ['gabriel jacinto', 'gabriel'], id: 'act_2493856707309984', nome: 'Gabriel Jacinto' },\n  { keys: ['dani escudero', 'dani'], id: 'act_2145598605527232', nome: 'Dani Escudero' },\n  { keys: ['agro'], id: 'act_929521557422139', nome: 'Agro' },\n  { keys: ['escola de musica', 'escola de m\\u00fasica', 'escola'], id: 'act_544347952854095', nome: 'Escola de M\\u00fasica' },\n  { keys: ['panmalhas'], id: 'act_1509005182799187', nome: 'Panmalhas Assessoria T\\u00eaxtil' },\n  { keys: ['gfix store', 'gfix'], id: 'act_2811791829124905', nome: 'GFiX Store' },\n  { keys: ['arte em gelo', 'arte em'], id: 'act_5585082641598366', nome: 'Arte em Gelo' },\n  { keys: ['itag tecnologia', 'itag'], id: 'act_738466861151636', nome: 'ITAG Tecnologia' },\n  { keys: ['hi dogz', 'dogz'], id: 'act_873195821346004', nome: 'Hi Dogz' },\n  { keys: ['batata bistro', 'batata bistr\\u00f4', 'batata'], id: 'act_1673012226810411', nome: 'Batata Bistr\\u00f4' },\n  { keys: ['caribbean bronze', 'caribbean'], id: 'act_1082397873705862', nome: 'Caribbean Bronze' },\n  { keys: ['larissa kelleter', 'larissa'], id: 'act_738280412237298', nome: 'Larissa Kelleter' }\n];\n\n// Ordena por comprimento da primeira chave (mais especifico primeiro)\nclientMap.sort((a, b) => b.keys[0].length - a.keys[0].length);\n\n// Detecta pedido de relatorio\nconst isRelatorio = text.includes('relat');\n\nlet clientFound = null;\nfor (let i = 0; i < clientMap.length; i++) {\n  const entry = clientMap[i];\n  for (let j = 0; j < entry.keys.length; j++) {\n    if (text.includes(entry.keys[j])) {\n      clientFound = entry;\n      break;\n    }\n  }\n  if (clientFound) break;\n}\n\nconst today = fmt(now);\nconst yesterday = addDays(-1);\n// Corrigido: ultimos 7 dias = D-7 ate D-1 (igual ao Meta Ads)\nconst last7End = addDays(-1);\nconst last7Start = addDays(-7);\n\nconst isRelatorioWithClient = (isRelatorio && clientFound !== null) ? 'true' : 'false';\n// Modo todos: pede relatorio sem especificar cliente\nconst isRelatorioTodos = (isRelatorio && clientFound === null) ? 'true' : 'false';\n\n// Detecta periodo solicitado e mapeia para date_preset do Meta Ads\nconst hasMesPassado = text.includes('m\\u00eas passado') || text.includes('mes passado');\nconst hasEsseMes = text.includes('esse m\\u00eas') || text.includes('este m\\u00eas') || text.includes('esse mes') || text.includes('este mes');\n\nlet datePreset = 'last_7d';\nlet periodoLabel = '\\u00faltimos 7 dias';\nlet periodStart = last7Start;\nlet periodEnd = last7End;\n\nif (hasMesPassado) {\n  datePreset = 'last_month';\n  periodoLabel = 'm\\u00eas passado';\n  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);\n  const lastOfPrevMonth = new Date(firstOfMonth.getTime() - 86400000);\n  const firstOfPrevMonth = new Date(lastOfPrevMonth.getFullYear(), lastOfPrevMonth.getMonth(), 1);\n  periodStart = fmt(firstOfPrevMonth);\n  periodEnd = fmt(lastOfPrevMonth);\n} else if (text.includes('ontem')) {\n  datePreset = 'yesterday';\n  periodoLabel = 'ontem';\n  periodStart = yesterday;\n  periodEnd = yesterday;\n} else if (text.includes('hoje')) {\n  datePreset = 'today';\n  periodoLabel = 'hoje';\n  periodStart = today;\n  periodEnd = today;\n} else if (text.includes('essa semana') || text.includes('esta semana') || text.includes('da semana')) {\n  datePreset = 'this_week_mon_today';\n  periodoLabel = 'essa semana';\n  periodStart = fmt(monday);\n  periodEnd = today;\n} else if (text.includes('14 dias')) {\n  datePreset = 'last_14d';\n  periodoLabel = '\\u00faltimos 14 dias';\n  periodStart = addDays(-14);\n  periodEnd = addDays(-1);\n} else if (text.includes('30 dias') || hasEsseMes) {\n  datePreset = 'last_30d';\n  periodoLabel = '\\u00faltimos 30 dias';\n  periodStart = addDays(-30);\n  periodEnd = addDays(-1);\n}\n\nreturn [{\n  json: {\n    text: input.text,\n    phone: input.phone,\n    remoteJid: input.remoteJid,\n    instance: input.instance,\n    today: today,\n    yesterday: yesterday,\n    weekStart: fmt(monday),\n    last7: last7Start,\n    last30: addDays(-30),\n    last7Start: last7Start,\n    last7End: last7End,\n    metaToken: 'EAAeVLzZANk8oBQ79Ue5UimCCCYL9uNZCH9EZA7vZAJtqB5B9aQ6mO53EnUI1b8Cskpq9tRsYZAaDKvZB1kLZABjbqgwi3aenhyPnAtQkeineasNmaZA7vue9ndlaErc59UFZBaMBeDnBC8ZBpXtn9PdUP4OMQvkd53QZAL1jI9SC49WGZCvgopdZABkhGKCEuVStyYGRfYPrlhksx7HHkqZBNWo5gMLhREik5hvkp1JA7X',\n    isRelatorio: isRelatorio,\n    isRelatorioWithClient: isRelatorioWithClient,\n    isRelatorioTodos: isRelatorioTodos,\n    clientFound: clientFound ? clientFound.id : null,\n    clientNome: clientFound ? clientFound.nome : null,\n    datePreset: datePreset,\n    periodoLabel: periodoLabel,\n    periodStart: periodStart,\n    periodEnd: periodEnd\n  }\n}];"
+      },
+      "id": "5b953b43-14ca-4ed3-b8da-3ec455f58b92",
+      "name": "Calcular Datas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-relatorio",
+              "leftValue": "={{ $json.isRelatorioWithClient }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "151d4a8d-966e-4ca1-a145-cc2692dec81e",
+      "name": "É Relatório Semanal?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        544,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-todos",
+              "leftValue": "={{ $json.isRelatorioTodos }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e2f1a3b4-5c6d-7e8f-9a0b-1c2d3e4f5a6b",
+      "name": "É Relatório de Todos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        768,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const https = require('https');\nconst httpGet = (url) => new Promise((resolve, reject) => {\n  https.get(url, (res) => {\n    let d = '';\n    res.on('data', c => d += c);\n    res.on('end', () => { try { resolve(JSON.parse(d)); } catch(e) { reject(e); } });\n  }).on('error', reject);\n});\n\nconst ctx = $('Calcular Datas').first().json;\nconst token = ctx.metaToken;\nconst datePreset = ctx.datePreset || 'last_7d';\nconst periodStart = ctx.periodStart;\nconst periodEnd = ctx.periodEnd;\nconst periodoLabel = ctx.periodoLabel || 'últimos 7 dias';\nconst phone = ctx.phone;\n\n// 9 clientes ativos para relatório automático\nconst clientMap = [\n  { id: 'act_929521557422139',   nome: 'Agro',                      type: 'lead'     },\n  { id: 'act_5585082641598366',  nome: 'Arte em Gelo',              type: 'lead'     },\n  { id: 'act_1673012226810411',  nome: 'Batata Bistrô',             type: 'purchase' },\n  { id: 'act_1082397873705862',  nome: 'Caribbean Bronze',          type: 'lead'     },\n  { id: 'act_544347952854095',   nome: 'Escola de Música',          type: 'lead'     },\n  { id: 'act_2811791829124905',  nome: 'GFiX Store',                type: 'lead'     },\n  { id: 'act_873195821346004',   nome: 'Hi Dogz',                   type: 'purchase' },\n  { id: 'act_738466861151636',   nome: 'ITAG Tecnologia',           type: 'lead'     },\n  { id: 'act_1509005182799187',  nome: 'Panmalhas Assessoria Têxtil', type: 'lead'   }\n];\n\nconst fmtMoney = (val) => {\n  const n = parseFloat(val) || 0;\n  const fixed = n.toFixed(2);\n  const parts = fixed.split('.');\n  parts[0] = parts[0].replace(/(\\d)(?=(\\d{3})+$)/g, '$1.');\n  return parts[0] + ',' + parts[1];\n};\n\nconst fmtNum = (val) => {\n  const n = parseInt(val) || 0;\n  return String(n).replace(/(\\d)(?=(\\d{3})+$)/g, '$1.');\n};\n\nconst fmtBR = (dateStr) => {\n  if (!dateStr) return '??/??';\n  const d = new Date(dateStr + 'T12:00:00Z');\n  return String(d.getUTCDate()).padStart(2, '0') + '/' + String(d.getUTCMonth() + 1).padStart(2, '0');\n};\n\nconst LEAD_ACTION = 'onsite_conversion.total_messaging_connection';\nconst fields = 'spend,impressions,clicks,actions,action_values';\n\nconst dateRange = periodStart === periodEnd\n  ? '_📅 ' + fmtBR(periodStart) + ' (' + periodoLabel + ')_'\n  : '_📅 ' + fmtBR(periodStart) + ' a ' + fmtBR(periodEnd) + ' (' + periodoLabel + ')_';\n\nconst fetchClient = async (client) => {\n  try {\n    const url = 'https://graph.facebook.com/v19.0/' + client.id + '/insights?date_preset=' +\n      encodeURIComponent(datePreset) + '&fields=' + encodeURIComponent(fields) +\n      '&level=campaign&access_token=' + token;\n    const data = await httpGet(url);\n\n    if (data.error) return null; // ignora conta com erro de acesso\n\n    const campaigns = data.data || [];\n    if (!campaigns.length) return null; // sem dados no período\n\n    let totalSpend = 0, totalImpressions = 0, totalClicks = 0;\n    for (const c of campaigns) {\n      totalSpend += parseFloat(c.spend || '0');\n      totalImpressions += parseInt(c.impressions || '0');\n      totalClicks += parseInt(c.clicks || '0');\n    }\n\n    if (totalSpend === 0) return null; // sem investimento no período, ignora\n\n    let reportText;\n\n    if (client.type === 'purchase') {\n      let totalPurchases = 0, totalRevenue = 0;\n      for (const c of campaigns) {\n        const pa = (c.actions || []).find(a =>\n          a.action_type === 'purchase' || a.action_type === 'offsite_conversion.fb_pixel_purchase');\n        if (pa) totalPurchases += parseInt(pa.value);\n        const ra = (c.action_values || []).find(a =>\n          a.action_type === 'purchase' || a.action_type === 'offsite_conversion.fb_pixel_purchase');\n        if (ra) totalRevenue += parseFloat(ra.value);\n      }\n      const cpp = totalPurchases > 0 ? totalSpend / totalPurchases : 0;\n      reportText =\n        '*' + client.nome.toUpperCase() + '*\\n\\n' +\n        dateRange + '\\n\\n' +\n        '*Meta Ads*\\n\\n' +\n        'Impressões: ' + fmtNum(totalImpressions) + '\\n\\n' +\n        'Cliques: ' + fmtNum(totalClicks) + '\\n\\n' +\n        'Vendas: ' + totalPurchases + '\\n\\n' +\n        'Faturamento: R$ ' + fmtMoney(totalRevenue) + '\\n\\n' +\n        'Custo por venda: R$ ' + fmtMoney(cpp) + '\\n\\n' +\n        '*INVESTIMENTO TOTAL: R$ ' + fmtMoney(totalSpend) + '*';\n    } else {\n      let leadSpend = 0, totalLeads = 0;\n      for (const c of campaigns) {\n        const la = (c.actions || []).find(a => a.action_type === LEAD_ACTION);\n        if (la) {\n          leadSpend += parseFloat(c.spend || '0');\n          totalLeads += parseInt(la.value);\n        }\n      }\n      const cpl = totalLeads > 0 ? leadSpend / totalLeads : 0;\n      reportText =\n        '*' + client.nome.toUpperCase() + '*\\n\\n' +\n        dateRange + '\\n\\n' +\n        '*Meta Ads*\\n\\n' +\n        'Impressões: ' + fmtNum(totalImpressions) + '\\n\\n' +\n        'Cliques: ' + fmtNum(totalClicks) + '\\n\\n' +\n        'Leads: ' + totalLeads + '\\n\\n' +\n        'Custo por lead: R$ ' + fmtMoney(cpl) + '\\n\\n' +\n        '*INVESTIMENTO TOTAL: R$ ' + fmtMoney(totalSpend) + '*';\n    }\n\n    return { json: { phone: phone, output: reportText } };\n  } catch(e) {\n    return null; // ignora clientes com erro de conexão\n  }\n};\n\nconst allResults = await Promise.all(clientMap.map(fetchClient));\nconst results = allResults.filter(r => r !== null);\n\nif (results.length === 0) {\n  return [{ json: { phone: phone, output: '❌ Nenhum dado encontrado para o período (' + periodoLabel + ').' } }];\n}\n\nreturn results;"
+      },
+      "id": "f1e2d3c4-b5a6-7890-abcd-ef1234567890",
+      "name": "Buscar e Formatar Todos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://graph.facebook.com/v19.0/' + $json.clientFound + '/insights' }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "date_preset",
+              "value": "={{ $('Calcular Datas').first().json.datePreset }}"
+            },
+            {
+              "name": "fields",
+              "value": "spend,impressions,clicks,ctr,actions,action_values,reach,campaign_name"
+            },
+            {
+              "name": "level",
+              "value": "campaign"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $json.metaToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "0ad35b21-41cf-4cca-a7a3-f8bfe29f4467",
+      "name": "Buscar Insights 7 Dias",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        768,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const metaData = $input.first().json;\nconst ctx = $('Calcular Datas').first().json;\nconst campaigns = metaData.data || [];\n\nconst fmtMoney = (val) => {\n  const n = parseFloat(val) || 0;\n  const fixed = n.toFixed(2);\n  const parts = fixed.split('.');\n  parts[0] = parts[0].replace(/(\\d)(?=(\\d{3})+$)/g, '$1.');\n  return parts[0] + ',' + parts[1];\n};\n\nconst fmtNum = (val) => {\n  const n = parseInt(val) || 0;\n  return String(n).replace(/(\\d)(?=(\\d{3})+$)/g, '$1.');\n};\n\nconst fmtBR = (dateStr) => {\n  const d = new Date(dateStr + 'T12:00:00Z');\n  return String(d.getUTCDate()).padStart(2, '0') + '/' + String(d.getUTCMonth() + 1).padStart(2, '0');\n};\n\nif (!campaigns.length) {\n  return [{ json: {\n    phone: ctx.phone,\n    output: '\\u274c Sem dados para *' + (ctx.clientNome || '').toUpperCase() + '* no per\\u00edodo solicitado.'\n  } }];\n}\n\nconst purchaseAccountIds = ['act_873195821346004', 'act_1673012226810411'];\nconst isPurchase = purchaseAccountIds.includes(ctx.clientFound);\n\nlet totalSpend = 0;\nlet totalImpressions = 0;\nlet totalClicks = 0;\n\nfor (const c of campaigns) {\n  totalSpend += parseFloat(c.spend || '0');\n  totalImpressions += parseInt(c.impressions || '0');\n  totalClicks += parseInt(c.clicks || '0');\n}\n\nconst clientNameUpper = (ctx.clientNome || '').toUpperCase();\nconst periodoLabel = ctx.periodoLabel || '\\u00faltimos 7 dias';\nconst periodStart = ctx.periodStart || ctx.last7Start;\nconst periodEnd = ctx.periodEnd || ctx.last7End;\nconst dateRange = periodStart === periodEnd\n  ? '_\\ud83d\\udcc5 ' + fmtBR(periodStart) + ' (' + periodoLabel + ')_'\n  : '_\\ud83d\\udcc5 ' + fmtBR(periodStart) + ' a ' + fmtBR(periodEnd) + ' (' + periodoLabel + ')_';\n\nlet reportText;\n\nif (isPurchase) {\n  let totalPurchases = 0;\n  let totalRevenue = 0;\n  for (const c of campaigns) {\n    const purchaseAction = (c.actions || []).find(a =>\n      a.action_type === 'purchase' ||\n      a.action_type === 'offsite_conversion.fb_pixel_purchase'\n    );\n    if (purchaseAction) totalPurchases += parseInt(purchaseAction.value);\n    const revenueAction = (c.action_values || []).find(a =>\n      a.action_type === 'purchase' ||\n      a.action_type === 'offsite_conversion.fb_pixel_purchase'\n    );\n    if (revenueAction) totalRevenue += parseFloat(revenueAction.value);\n  }\n  const cpp = totalPurchases > 0 ? totalSpend / totalPurchases : 0;\n  reportText =\n    '*' + clientNameUpper + '*' + '\\n\\n' +\n    dateRange + '\\n\\n' +\n    '*Meta Ads*' + '\\n\\n' +\n    'Impress\\u00f5es: ' + fmtNum(totalImpressions) + '\\n\\n' +\n    'Cliques: ' + fmtNum(totalClicks) + '\\n\\n' +\n    'Vendas: ' + totalPurchases + '\\n\\n' +\n    'Faturamento: R$ ' + fmtMoney(totalRevenue) + '\\n\\n' +\n    'Custo por venda: R$ ' + fmtMoney(cpp) + '\\n\\n' +\n    '*INVESTIMENTO TOTAL: R$ ' + fmtMoney(totalSpend) + '*';\n} else {\n  // Leads = Novos contatos de mensagem (campanhas WhatsApp)\n  // CPL calculado somente sobre campanhas com destino WhatsApp\n  const LEAD_ACTION = 'onsite_conversion.total_messaging_connection';\n\n  let leadSpend = 0;\n  let totalLeads = 0;\n  for (const c of campaigns) {\n    const leadAction = (c.actions || []).find(a => a.action_type === LEAD_ACTION);\n    if (leadAction) {\n      leadSpend += parseFloat(c.spend || '0');\n      totalLeads += parseInt(leadAction.value);\n    }\n  }\n  const cpl = totalLeads > 0 ? leadSpend / totalLeads : 0;\n  reportText =\n    '*' + clientNameUpper + '*' + '\\n\\n' +\n    dateRange + '\\n\\n' +\n    '*Meta Ads*' + '\\n\\n' +\n    'Impress\\u00f5es: ' + fmtNum(totalImpressions) + '\\n\\n' +\n    'Cliques: ' + fmtNum(totalClicks) + '\\n\\n' +\n    'Leads: ' + totalLeads + '\\n\\n' +\n    'Custo por lead: R$ ' + fmtMoney(cpl) + '\\n\\n' +\n    '*INVESTIMENTO TOTAL: R$ ' + fmtMoney(totalSpend) + '*';\n}\n\nreturn [{ json: { phone: ctx.phone, output: reportText } }];"
+      },
+      "id": "2b3745d9-82ef-4d9a-aa8d-db402408a07e",
+      "name": "Formatar Relatório",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n-evolution-api.xeq31m.easypanel.host/message/sendText/Clarice",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "07CA5E59D86C-43F3-95B4-BCBC3CE2E5E4"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $json.phone }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.output }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "b339c96a-4c60-4a45-98ea-4091d5ec847d",
+      "name": "Enviar Relatório WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1216,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v19.0/me/adaccounts",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,name,account_status,currency,amount_spent,balance"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $json.metaToken }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "1daa387b-bc23-4e31-b837-e8dcc048044e",
+      "name": "Buscar Contas Meta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        768,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const metaResp = $input.first().json;\nconst ctx = $('Calcular Datas').first().json;\nconst allAccounts = metaResp.data || [];\nconst accountsList = allAccounts.map(a => {\n  const status = a.account_status === 1 ? '\\u2705 Ativa' : '\\u23f8 Inativa';\n  return '\\u2022 ' + a.name + ' | ID: ' + a.id + ' | ' + a.currency + ' | ' + status;\n}).join('\\n') || 'Nenhuma conta encontrada';\nreturn [{ json: {\n  text: ctx.text,\n  phone: ctx.phone,\n  remoteJid: ctx.remoteJid,\n  instance: ctx.instance,\n  today: ctx.today,\n  yesterday: ctx.yesterday,\n  weekStart: ctx.weekStart,\n  last7: ctx.last7,\n  last30: ctx.last30,\n  last7Start: ctx.last7Start,\n  last7End: ctx.last7End,\n  metaToken: ctx.metaToken,\n  isRelatorio: ctx.isRelatorio,\n  isRelatorioWithClient: ctx.isRelatorioWithClient,\n  clientFound: ctx.clientFound,\n  clientNome: ctx.clientNome,\n  accounts: allAccounts,\n  accountsList: accountsList\n} }];"
+      },
+      "id": "9c2de825-ffbd-4870-b0e5-3f4a72c6c7b1",
+      "name": "Montar Contexto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "options": {
+          "systemMessage": "=Você é Alicia, assistente especializada em Meta Ads. Você gerencia uma carteira de 13 clientes ativos e ajuda gestores de tráfego a analisar métricas de campanhas com clareza e precisão.\n\n📅 DATA ATUAL: {{ $json.today }}\n📅 ONTEM: {{ $json.yesterday }}\n📅 INÍCIO DA SEMANA (seg): {{ $json.weekStart }}\n📅 7 DIAS ATRÁS: {{ $json.last7 }}\n📅 30 DIAS ATRÁS: {{ $json.last30 }}\n\n👨‍💼 CARTEIRA DE CLIENTES (13 clientes ativos):\n• Antonio Neto → act_497795903676192 | Tipo: Lead Gen (WhatsApp)\n• Gabriel Jacinto → act_2493856707309984 | Tipo: Lead Gen (WhatsApp)\n• Dani Escudero → act_2145598605527232 | Tipo: Lead Gen (WhatsApp)\n• Agro → act_929521557422139 | Tipo: Lead Gen (WhatsApp)\n• Escola de Música → act_544347952854095 | Tipo: Lead Gen (WhatsApp)\n• Panmalhas → act_1509005182799187 | Tipo: Lead Gen (WhatsApp)\n• GFiX Store → act_2811791829124905 | Tipo: Lead Gen (WhatsApp)\n• Arte em Gelo → act_5585082641598366 | Tipo: Lead Gen (WhatsApp)\n• ITAG Tecnologia → act_738466861151636 | Tipo: Lead Gen (WhatsApp)\n• Hi Dogz → act_873195821346004 | Tipo: VENDAS (e-commerce)\n• Batata Bistrô → act_1673012226810411 | Tipo: VENDAS (e-commerce)\n• Caribbean Bronze → act_1082397873705862 | Tipo: Lead Gen (WhatsApp)\n• Larissa Kelleter → act_738280412237298 | Tipo: Lead Gen (WhatsApp)\n\n🏢 CONTAS DISPONÍVEIS (status atual):\n{{ $json.accountsList }}\n\n📋 REGRAS IMPORTANTES:\n1. Aceite nomes parciais: 'itag' = ITAG Tecnologia, 'batata' = Batata Bistrô, 'gfix' = GFiX Store, 'caribbean' = Caribbean Bronze\n2. LEADS = métrica \"Novos contatos de mensagem\" = action_type: onsite_conversion.total_messaging_connection (fallback: onsite_conversion.messaging_conversation_started_7d)\n3. CPL (Custo por Lead) = gasto APENAS das campanhas com destino WhatsApp (campanhas que possuem a métrica novos contatos de mensagem) ÷ total de leads. NÃO divide o gasto total por leads.\n4. VENDAS (Hi Dogz e Batata Bistrô) = action_type: purchase ou offsite_conversion.fb_pixel_purchase. Mostrar: vendas, faturamento, custo por venda.\n5. date_presets válidos: today, yesterday, this_week_mon_today, last_7d, last_14d, last_30d, last_month\n6. Budgets da Meta vêm em CENTAVOS - divida por 100 para exibir em reais\n7. Responda SEMPRE em português do Brasil\n8. Use emojis para tornar a resposta visual e amigável\n9. Seja concisa mas completa\n10. Período padrão: últimos 7 dias (D-7 até D-1, igual ao Meta Ads)\n\n🎨 FORMATO DE RESPOSTA PADRÃO:\n*NOME DO CLIENTE EM MAIÚSCULAS*\n\n_📅 DD/MM a DD/MM (período)_\n\n*Meta Ads*\n\nImpressões: X.XXX\n\nCliques: X.XXX\n\nLeads: XX (ou Vendas/Faturamento para Hi Dogz e Batata Bistrô)\n\nCusto por lead: R$ XX,XX (ou Custo por venda)\n\n*INVESTIMENTO TOTAL: R$ X.XXX,XX*\n\n⚠️ Se não houver dados para o período, informe o usuário claramente."
+        }
+      },
+      "id": "36e08f36-8634-478d-a32c-8bf22671531e",
+      "name": "Alicia Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1216,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "model": "claude-opus-4-5",
+        "options": {
+          "maxTokensToSample": 2048,
+          "temperature": 0.1
+        }
+      },
+      "id": "b8f7ba35-80c0-451b-899d-a40a05352a7b",
+      "name": "Claude Opus",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        960,
+        540
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "G8q6yzOfEbfoOtOT",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "buscar_insights",
+        "description": "Busca métricas/insights do Meta Ads. Use para: gasto (spend), leads (actions), impressões, cliques, CTR, CPC, alcance. Envie JSON com: object_id (ID da conta ex: act_123456 OU ID de campanha), date_preset (today/yesterday/this_week_mon_today/last_7d/last_14d/last_30d/last_month), fields (ex: spend,impressions,clicks,ctr,cpc,actions,reach,cost_per_action_type), level opcional (account/campaign/adset/ad). IMPORTANTE: Para leads, inclua 'actions' nos fields e filtre por action_type = onsite_conversion.total_messaging_connection.",
+        "jsCode": "let params;\ntry { params = JSON.parse(query); } catch(e) { return 'Erro: envie JSON com object_id e date_preset'; }\nconst https = require('https');\nconst httpGet = (u) => new Promise((resolve, reject) => { https.get(u, (res) => { let d = ''; res.on('data', c => d += c); res.on('end', () => { try { resolve(JSON.parse(d)); } catch(err) { reject(err); } }); }).on('error', reject); });\nconst token = 'EAAeVLzZANk8oBQ79Ue5UimCCCYL9uNZCH9EZA7vZAJtqB5B9aQ6mO53EnUI1b8Cskpq9tRsYZAaDKvZB1kLZABjbqgwi3aenhyPnAtQkeineasNmaZA7vue9ndlaErc59UFZBaMBeDnBC8ZBpXtn9PdUP4OMQvkd53QZAL1jI9SC49WGZCvgopdZABkhGKCEuVStyYGRfYPrlhksx7HHkqZBNWo5gMLhREik5hvkp1JA7X';\nconst objectId = params.object_id;\nconst datePreset = params.date_preset || 'today';\nconst fields = params.fields || 'spend,impressions,clicks,ctr,cpc,actions,reach,cost_per_action_type';\nconst level = params.level || '';\nif (!objectId) return 'Erro: object_id é obrigatório';\nlet url = `https://graph.facebook.com/v19.0/${objectId}/insights?date_preset=${encodeURIComponent(datePreset)}&fields=${encodeURIComponent(fields)}&access_token=${token}`;\nif (level) url += `&level=${encodeURIComponent(level)}`;\ntry {\n  const data = await httpGet(url);\n  if (data.error) return `Erro Meta API: ${data.error.message} (código: ${data.error.code})`;\n  if (!data.data || data.data.length === 0) return 'Nenhum dado encontrado para o período solicitado.';\n  return JSON.stringify(data.data);\n} catch(e) { return `Erro de conexão: ${e.message}`; }"
+      },
+      "id": "13abddfb-207b-4d02-aa60-c7b8658c7860",
+      "name": "Tool: Buscar Insights",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        1136,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "name": "listar_campanhas",
+        "description": "Lista todas as campanhas de uma conta de anúncios. Envie JSON com: account_id (formato: act_XXXXXXXXX). Retorna: id, nome, status, objetivo, budget diário e total. Use para encontrar o ID de uma campanha específica antes de buscar os insights.",
+        "jsCode": "let params;\ntry { params = JSON.parse(query); } catch(e) { return 'Erro: envie JSON com account_id'; }\nconst https = require('https');\nconst httpGet = (u) => new Promise((resolve, reject) => { https.get(u, (res) => { let d = ''; res.on('data', c => d += c); res.on('end', () => { try { resolve(JSON.parse(d)); } catch(err) { reject(err); } }); }).on('error', reject); });\nconst token = 'EAAeVLzZANk8oBQ79Ue5UimCCCYL9uNZCH9EZA7vZAJtqB5B9aQ6mO53EnUI1b8Cskpq9tRsYZAaDKvZB1kLZABjbqgwi3aenhyPnAtQkeineasNmaZA7vue9ndlaErc59UFZBaMBeDnBC8ZBpXtn9PdUP4OMQvkd53QZAL1jI9SC49WGZCvgopdZABkhGKCEuVStyYGRfYPrlhksx7HHkqZBNWo5gMLhREik5hvkp1JA7X';\nconst accountId = params.account_id;\nif (!accountId) return 'Erro: account_id é obrigatório (formato: act_XXXXXXXXX)';\ntry {\n  const url = `https://graph.facebook.com/v19.0/${accountId}/campaigns?fields=id,name,status,objective,daily_budget,lifetime_budget&limit=100&access_token=${token}`;\n  const data = await httpGet(url);\n  if (data.error) return `Erro Meta API: ${data.error.message}`;\n  if (!data.data || data.data.length === 0) return 'Nenhuma campanha encontrada nessa conta';\n  const campaigns = data.data.map(c => ({\n    id: c.id,\n    nome: c.name,\n    status: c.status,\n    objetivo: c.objective,\n    budget_diario_reais: c.daily_budget ? (parseInt(c.daily_budget) / 100).toFixed(2) : null,\n    budget_total_reais: c.lifetime_budget ? (parseInt(c.lifetime_budget) / 100).toFixed(2) : null\n  }));\n  return JSON.stringify(campaigns);\n} catch(e) { return `Erro de conexão: ${e.message}`; }"
+      },
+      "id": "731c36fc-e0b1-44a4-a13e-fcda6b6f2a2e",
+      "name": "Tool: Listar Campanhas",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        1296,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "name": "listar_conjuntos",
+        "description": "Lista conjuntos de anúncios (adsets) de uma conta ou campanha. Envie JSON com: account_id (act_XXXXXXXXX) OU campaign_id (ID numérico). Retorna: id, nome, status e budget.",
+        "jsCode": "let params;\ntry { params = JSON.parse(query); } catch(e) { return 'Erro: envie JSON com account_id ou campaign_id'; }\nconst https = require('https');\nconst httpGet = (u) => new Promise((resolve, reject) => { https.get(u, (res) => { let d = ''; res.on('data', c => d += c); res.on('end', () => { try { resolve(JSON.parse(d)); } catch(err) { reject(err); } }); }).on('error', reject); });\nconst token = 'EAAeVLzZANk8oBQ79Ue5UimCCCYL9uNZCH9EZA7vZAJtqB5B9aQ6mO53EnUI1b8Cskpq9tRsYZAaDKvZB1kLZABjbqgwi3aenhyPnAtQkeineasNmaZA7vue9ndlaErc59UFZBaMBeDnBC8ZBpXtn9PdUP4OMQvkd53QZAL1jI9SC49WGZCvgopdZABkhGKCEuVStyYGRfYPrlhksx7HHkqZBNWo5gMLhREik5hvkp1JA7X';\nconst accountId = params.account_id;\nconst campaignId = params.campaign_id;\nif (!accountId && !campaignId) return 'Erro: forneça account_id ou campaign_id';\nconst baseId = campaignId || accountId;\ntry {\n  const url = `https://graph.facebook.com/v19.0/${baseId}/adsets?fields=id,name,status,daily_budget,lifetime_budget,campaign_id&limit=100&access_token=${token}`;\n  const data = await httpGet(url);\n  if (data.error) return `Erro Meta API: ${data.error.message}`;\n  if (!data.data || data.data.length === 0) return 'Nenhum conjunto de anúncios encontrado';\n  const adsets = data.data.map(a => ({\n    id: a.id,\n    nome: a.name,\n    status: a.status,\n    budget_diario_reais: a.daily_budget ? (parseInt(a.daily_budget) / 100).toFixed(2) : null,\n    budget_total_reais: a.lifetime_budget ? (parseInt(a.lifetime_budget) / 100).toFixed(2) : null\n  }));\n  return JSON.stringify(adsets);\n} catch(e) { return `Erro de conexão: ${e.message}`; }"
+      },
+      "id": "a8b12824-f38e-4296-87fe-49bd6e9f934b",
+      "name": "Tool: Listar Conjuntos",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        1408,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "name": "buscar_insights_multiplas_contas",
+        "description": "Busca insights de MÚLTIPLAS contas ao mesmo tempo. Use quando o usuário não especificar cliente. Envie JSON com: account_ids (array de IDs ex: ['act_111','act_222']), date_preset, fields.",
+        "jsCode": "let params;\ntry { params = JSON.parse(query); } catch(e) { return 'Erro: envie JSON com account_ids (array), date_preset e fields'; }\nconst https = require('https');\nconst httpGet = (u) => new Promise((resolve, reject) => { https.get(u, (res) => { let d = ''; res.on('data', c => d += c); res.on('end', () => { try { resolve(JSON.parse(d)); } catch(err) { reject(err); } }); }).on('error', reject); });\nconst token = 'EAAeVLzZANk8oBQ79Ue5UimCCCYL9uNZCH9EZA7vZAJtqB5B9aQ6mO53EnUI1b8Cskpq9tRsYZAaDKvZB1kLZABjbqgwi3aenhyPnAtQkeineasNmaZA7vue9ndlaErc59UFZBaMBeDnBC8ZBpXtn9PdUP4OMQvkd53QZAL1jI9SC49WGZCvgopdZABkhGKCEuVStyYGRfYPrlhksx7HHkqZBNWo5gMLhREik5hvkp1JA7X';\nconst accountIds = params.account_ids || [];\nconst datePreset = params.date_preset || 'today';\nconst fields = params.fields || 'spend,impressions,clicks,actions,reach';\nif (accountIds.length === 0) return 'Erro: account_ids deve ser um array com pelo menos 1 conta';\ntry {\n  const results = [];\n  for (const accountId of accountIds) {\n    const url = `https://graph.facebook.com/v19.0/${accountId}/insights?date_preset=${encodeURIComponent(datePreset)}&fields=${encodeURIComponent(fields)}&access_token=${token}`;\n    const data = await httpGet(url);\n    if (!data.error && data.data && data.data.length > 0) {\n      results.push({ account_id: accountId, data: data.data[0] });\n    } else if (data.error) {\n      results.push({ account_id: accountId, error: data.error.message });\n    } else {\n      results.push({ account_id: accountId, data: null, note: 'sem dados no período' });\n    }\n  }\n  return JSON.stringify(results);\n} catch(e) { return `Erro de conexão: ${e.message}`; }"
+      },
+      "id": "81aa87da-6607-4ffc-95b9-1be17e23ec68",
+      "name": "Tool: Insights Multiplas Contas",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [
+        1520,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n-evolution-api.xeq31m.easypanel.host/message/sendText/Clarice",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "07CA5E59D86C-43F3-95B4-BCBC3CE2E5E4"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Calcular Datas').first().json.phone }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.output }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "767c226e-c649-487e-be1f-5a19db725162",
+      "name": "Enviar Resposta WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1520,
+        320
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Evolution API": {
+      "main": [
+        [
+          {
+            "node": "Parse Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Message": {
+      "main": [
+        [
+          {
+            "node": "Menciona Alicia?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Menciona Alicia?": {
+      "main": [
+        [
+          {
+            "node": "Calcular Datas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular Datas": {
+      "main": [
+        [
+          {
+            "node": "É Relatório Semanal?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É Relatório Semanal?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Insights 7 Dias",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "É Relatório de Todos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É Relatório de Todos?": {
+      "main": [
+        [
+          {
+            "node": "Buscar e Formatar Todos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Buscar Contas Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar e Formatar Todos": {
+      "main": [
+        [
+          {
+            "node": "Enviar Relatório WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Insights 7 Dias": {
+      "main": [
+        [
+          {
+            "node": "Formatar Relatório",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar Relatório": {
+      "main": [
+        [
+          {
+            "node": "Enviar Relatório WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Contas Meta": {
+      "main": [
+        [
+          {
+            "node": "Montar Contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar Contexto": {
+      "main": [
+        [
+          {
+            "node": "Alicia Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alicia Agent": {
+      "main": [
+        [
+          {
+            "node": "Enviar Resposta WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Opus": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Alicia Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: Buscar Insights": {
+      "ai_tool": [
+        [
+          {
+            "node": "Alicia Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: Listar Campanhas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Alicia Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: Listar Conjuntos": {
+      "ai_tool": [
+        [
+          {
+            "node": "Alicia Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: Insights Multiplas Contas": {
+      "ai_tool": [
+        [
+          {
+            "node": "Alicia Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "be0265a4-12a2-4b9c-9261-6f0a5ccb0059",
+  "meta": {
+    "instanceId": "e41a2f460652c42ec14d34a1f52c8950eaafd8f9e5a90fe9db358faaccf046d7"
+  },
+  "id": "uIUtsjBWTxjZObX3",
+  "tags": []
+}
