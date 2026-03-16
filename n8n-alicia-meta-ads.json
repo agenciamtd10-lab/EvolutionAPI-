@@ -170,7 +170,7 @@
           "parameters": [
             {
               "name": "apikey",
-              "value": "SUA_APIKEY_AQUI"
+              "value": "07CA5E59D86C-43F3-95B4-BCBC3CE2E5E4"
             },
             {
               "name": "Content-Type",
@@ -285,7 +285,7 @@
       ],
       "credentials": {
         "anthropicApi": {
-          "id": "SEU_ID_ANTHROPIC_AQUI",
+          "id": "G8q6yzOfEbfoOtOT",
           "name": "Anthropic API"
         }
       }
@@ -359,7 +359,7 @@
           "parameters": [
             {
               "name": "apikey",
-              "value": "SUA_APIKEY_AQUI"
+              "value": "07CA5E59D86C-43F3-95B4-BCBC3CE2E5E4"
             },
             {
               "name": "Content-Type",
