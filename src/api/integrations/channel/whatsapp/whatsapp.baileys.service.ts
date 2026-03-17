@@ -663,7 +663,7 @@ export class BaileysStartupService extends ChannelStartupService {
 
         const isGroupJid = this.localSettings.groupsIgnore && isJidGroup(jid);
         const isBroadcast = !this.localSettings.readStatus && isJidBroadcast(jid);
-        const isNewsletter = isJidNewsletter(jid);
+        const isNewsletter = process.env.WEBHOOK_EVENTS_NEWSLETTER_IGNORE !== 'false' && isJidNewsletter(jid);
 
         return isGroupJid || isBroadcast || isNewsletter;
       },
