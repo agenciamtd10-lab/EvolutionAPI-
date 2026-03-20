@@ -126,12 +126,9 @@ export async function saveOnWhatsappCache(data: ISaveOnWhatsappCacheParams[]) {
       // Ordena os JIDs para garantir consistência na string final
       const sortedJidOptions = [...finalJidOptions].sort();
       const newJidOptionsString = sortedJidOptions.join(',');
-      const newLid = item.lid === 'lid' || item.remoteJid?.includes('@lid') ? 'lid' : null;
-
       const dataPayload = {
         remoteJid: remoteJid,
         jidOptions: newJidOptionsString,
-        lid: newLid,
       };
 
       // 4. Decide entre Criar ou Atualizar
@@ -142,9 +139,7 @@ export async function saveOnWhatsappCache(data: ISaveOnWhatsappCacheParams[]) {
           : '';
 
         const isDataSame =
-          existingRecord.remoteJid === dataPayload.remoteJid &&
-          existingJidOptionsString === dataPayload.jidOptions &&
-          existingRecord.lid === dataPayload.lid;
+          existingRecord.remoteJid === dataPayload.remoteJid && existingJidOptionsString === dataPayload.jidOptions;
 
         if (isDataSame) {
           logger.verbose(`[saveOnWhatsappCache] Data for ${remoteJid} is already up-to-date. Skipping update.`);
@@ -153,7 +148,7 @@ export async function saveOnWhatsappCache(data: ISaveOnWhatsappCacheParams[]) {
 
         // Os dados são diferentes, então atualiza
         logger.verbose(
-          `[saveOnWhatsappCache] Register exists, updating: remoteJid=${remoteJid}, jidOptions=${dataPayload.jidOptions}, lid=${dataPayload.lid}`,
+          `[saveOnWhatsappCache] Register exists, updating: remoteJid=${remoteJid}, jidOptions=${dataPayload.jidOptions}`,
         );
         await prismaRepository.isOnWhatsapp.update({
           where: { id: existingRecord.id },
@@ -162,7 +157,7 @@ export async function saveOnWhatsappCache(data: ISaveOnWhatsappCacheParams[]) {
       } else {
         // Cria nova entrada
         logger.verbose(
-          `[saveOnWhatsappCache] Register does not exist, creating: remoteJid=${remoteJid}, jidOptions=${dataPayload.jidOptions}, lid=${dataPayload.lid}`,
+          `[saveOnWhatsappCache] Register does not exist, creating: remoteJid=${remoteJid}, jidOptions=${dataPayload.jidOptions}`,
         );
         await prismaRepository.isOnWhatsapp.create({
           data: dataPayload,
@@ -203,7 +198,7 @@ export async function getOnWhatsappCache(remoteJids: string[]) {
       remoteJid: item.remoteJid,
       number: item.remoteJid.split('@')[0],
       jidOptions: item.jidOptions.split(','),
-      lid: item.lid,
+      lid: (item as any).lid || (item.remoteJid.includes('@lid') ? 'lid' : undefined),
     }));
   }
 

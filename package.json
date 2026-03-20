@@ -10,8 +10,8 @@
     "start:prod": "node dist/main",
     "dev:server": "tsx watch ./src/main.ts",
     "test": "tsx watch ./test/all.test.ts",
-    "lint": "eslint --fix --ext .ts src",
-    "lint:check": "eslint --ext .ts src",
+    "lint": "ESLINT_USE_FLAT_CONFIG=false eslint --fix --ext .ts src",
+    "lint:check": "ESLINT_USE_FLAT_CONFIG=false eslint --ext .ts src",
     "commit": "cz",
     "commitlint": "commitlint --edit",
     "db:generate": "node runWithProvider.js \"npx prisma generate --schema ./prisma/DATABASE_PROVIDER-schema.prisma\"",
@@ -53,7 +53,7 @@
   "homepage": "https://github.com/EvolutionAPI/evolution-api#readme",
   "lint-staged": {
     "src/**/*.{ts,js}": [
-      "eslint --fix"
+      "sh -c 'ESLINT_USE_FLAT_CONFIG=false eslint --fix'"
     ],
     "src/**/*.ts": [
       "sh -c 'tsc --noEmit'"

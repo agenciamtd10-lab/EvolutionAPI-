@@ -1,0 +1,38 @@
+{
+  "name": "engine",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/engine/src",
+  "projectType": "application",
+  "prefix": "engine",
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run dev:server",
+        "cwd": "apps/engine"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run build",
+        "cwd": "apps/engine"
+      }
+    },
+    "db:migrate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run db:deploy",
+        "cwd": "apps/engine"
+      }
+    },
+    "db:seed": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run db:seed",
+        "cwd": "apps/engine"
+      }
+    }
+  },
+  "tags": ["type:app", "scope:engine"]
+}
