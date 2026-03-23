@@ -24,6 +24,7 @@ import {
   blockUserSchema,
   contactValidateSchema,
   deleteMessageSchema,
+  fetchLidSchema,
   markChatUnreadSchema,
   messageUpSchema,
   messageValidateSchema,
@@ -218,6 +219,16 @@ export class ChatRouter extends RouterBroker {
           schema: profileSchema,
           ClassRef: NumberDto,
           execute: (instance, data) => chatController.fetchProfile(instance, data),
+        });
+
+        return res.status(HttpStatus.OK).json(response);
+      })
+      .post(this.routerPath('fetchLid'), ...guards, async (req, res) => {
+        const response = await this.dataValidate<NumberDto>({
+          request: req,
+          schema: fetchLidSchema,
+          ClassRef: NumberDto,
+          execute: (instance, data) => chatController.fetchLid(instance, data),
         });
 
         return res.status(HttpStatus.OK).json(response);
