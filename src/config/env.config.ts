@@ -454,6 +454,26 @@ export class ConfigService {
   }
 
   private envProcess(): Env {
+    const isProductionMode = process.env?.NODE_ENV === 'PROD';
+
+    const redisEnabledFallback = process.env?.CACHE_REDIS_ENABLED === 'true';
+    const redisLocalEnabled = process.env?.CACHE_REDIS_LOCAL_ENABLED === 'true';
+    const redisProductionEnabled = process.env?.CACHE_REDIS_PRODUCTION_ENABLED === 'true';
+
+    const redisUriFallback = process.env?.CACHE_REDIS_URI || '';
+    const redisLocalUri = process.env?.CACHE_REDIS_LOCAL_URI || redisUriFallback;
+    const redisProductionUri = process.env?.CACHE_REDIS_PRODUCTION_URI || redisUriFallback;
+
+    const selectedRedisEnabled = isProductionMode
+      ? process.env?.CACHE_REDIS_PRODUCTION_ENABLED
+        ? redisProductionEnabled
+        : redisEnabledFallback
+      : process.env?.CACHE_REDIS_LOCAL_ENABLED
+        ? redisLocalEnabled
+        : redisEnabledFallback;
+
+    const selectedRedisUri = isProductionMode ? redisProductionUri : redisLocalUri;
+
     return {
       SERVER: {
         NAME: process.env?.SERVER_NAME || 'evolution',
@@ -841,8 +861,8 @@ export class ConfigService {
       },
       CACHE: {
         REDIS: {
-          ENABLED: process.env?.CACHE_REDIS_ENABLED === 'true',
-          URI: process.env?.CACHE_REDIS_URI || '',
+          ENABLED: selectedRedisEnabled,
+          URI: selectedRedisUri,
           PREFIX_KEY: process.env?.CACHE_REDIS_PREFIX_KEY || 'evolution-cache',
           TTL: Number.parseInt(process.env?.CACHE_REDIS_TTL) || 604800,
           SAVE_INSTANCES: process.env?.CACHE_REDIS_SAVE_INSTANCES === 'true',
