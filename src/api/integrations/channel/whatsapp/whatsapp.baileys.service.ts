@@ -264,6 +264,7 @@ export class BaileysStartupService extends ChannelStartupService {
   private isDeleting = false; // Flag to prevent reconnection during deletion
   private logBaileys = this.configService.get<Log>('LOG').BAILEYS;
   private eventProcessingQueue: Promise<void> = Promise.resolve();
+  private _lastStream515At = 0;
 
   // Cumulative history sync counters (reset on new sync or completion)
   private historySyncMessageCount = 0;
@@ -506,7 +507,12 @@ export class BaileysStartupService extends ChannelStartupService {
         return;
       }
 
-      const shouldReconnect = !codesToNotReconnect.includes(statusCode);
+      // If a stream:error 515 (Baileys' "restart needed" handshake) just fired,
+      // a follow-up loggedOut is the expected restart signal — not an actual
+      // logout — so reconnect anyway.
+      const recentStream515 = Date.now() - this._lastStream515At < 30_000;
+      const shouldReconnect =
+        !codesToNotReconnect.includes(statusCode) || (statusCode === DisconnectReason.loggedOut && recentStream515);
 
       this.logger.info({
         message: 'Connection closed, evaluating reconnection',
@@ -514,6 +520,7 @@ export class BaileysStartupService extends ChannelStartupService {
         shouldReconnect,
         instanceName: this.instance.name,
       });
+
 
       if (shouldReconnect) {
         // Add 3 second delay before reconnection to prevent rapid reconnection loops
@@ -811,6 +818,12 @@ export class BaileysStartupService extends ChannelStartupService {
       console.log('CB:ack,class:call', packet);
       const payload = { event: 'CB:ack,class:call', packet: packet };
       this.sendDataWebhook(Events.CALL, payload, true, ['websocket']);
+    });
+
+    this.client.ws.on('CB:stream:error', (node: any) => {
+      if (node?.attrs?.code === '515') {
+        this._lastStream515At = Date.now();
+      }
     });
 
     this.phoneNumber = number;
