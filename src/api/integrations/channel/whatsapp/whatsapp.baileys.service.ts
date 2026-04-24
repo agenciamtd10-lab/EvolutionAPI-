@@ -1207,6 +1207,7 @@ export class BaileysStartupService extends ChannelStartupService {
             messageCount: this.historySyncMessageCount,
             chatCount: this.historySyncChatCount,
             contactCount: this.historySyncContactCount,
+            progress: normalizedProgress,
           });
 
           this.historySyncMessageCount = 0;
