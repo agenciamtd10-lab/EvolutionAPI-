@@ -839,10 +839,12 @@ export class BusinessStartupService extends ChannelStartupService {
       }
       if (received.statuses) {
         for await (const item of received.statuses) {
-          const remoteJid = createJid(item?.recipient_id ?? this.phoneNumber);
-          const key = {
+          const remoteId = item?.recipient_id ?? this.phoneNumber;
+          if (!remoteId) continue;
+
+          const key: any = {
             id: item.id,
-            remoteJid,
+            remoteJid: createJid(remoteId),
             fromMe: this.isCloudApiStatusFromMe(item, received),
           };
           if (settings?.groups_ignore && key.remoteJid.includes('@g.us')) {
@@ -861,6 +863,14 @@ export class BusinessStartupService extends ChannelStartupService {
 
             if (!findMessage) {
               return;
+            }
+
+            const findMessageKey: any = findMessage?.key ?? {};
+            if (findMessageKey?.remoteJid) {
+              key.remoteJid = findMessageKey.remoteJid;
+            }
+            if (typeof findMessageKey?.fromMe === 'boolean') {
+              key.fromMe = findMessageKey.fromMe;
             }
 
             if (item.message === null && item.status === undefined) {
