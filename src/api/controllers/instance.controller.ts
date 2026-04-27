@@ -458,15 +458,18 @@ export class InstanceController {
       if (instance.state === 'connecting' || instance.state === 'open') {
         try {
           await this.logout({ instanceName });
-        } catch (logoutError) {
-          // RIGARR PATCH: zombie instance cleanup.
-          // When a Baileys socket is dead but waInstances[name] still exists,
-          // logout() throws "Connection Closed". Without this catch, the
-          // remove.instance emit below never runs, leaving the zombie in memory
-          // forever (only fixable by restarting the entire container).
-          this.logger.warn(
-            `[ZOMBIE-CLEANUP] logout failed for "${instanceName}" (likely zombie socket): ${logoutError?.toString?.() || logoutError}. Proceeding with cleanup.`,
-          );
+        } catch (error) {
+          // logout can throw "Connection Closed" when the underlying Baileys
+          // socket is already dead but waInstances[name] still exists. We
+          // must continue to the remove.instance emit below — that is the
+          // only path that purges the in-memory entry and runs cleaningUp().
+          // Without this catch, the stale entry persists until the entire
+          // process restarts.
+          this.logger.warn({
+            message: 'logout failed during deleteInstance — proceeding with cleanup',
+            instanceName,
+            error,
+          });
         }
       }
 
