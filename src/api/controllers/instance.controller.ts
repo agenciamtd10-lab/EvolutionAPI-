@@ -456,7 +456,18 @@ export class InstanceController {
       if (this.configService.get<Chatwoot>('CHATWOOT').ENABLED) waInstances?.clearCacheChatwoot();
 
       if (instance.state === 'connecting' || instance.state === 'open') {
-        await this.logout({ instanceName });
+        try {
+          await this.logout({ instanceName });
+        } catch (logoutError) {
+          // RIGARR PATCH: zombie instance cleanup.
+          // When a Baileys socket is dead but waInstances[name] still exists,
+          // logout() throws "Connection Closed". Without this catch, the
+          // remove.instance emit below never runs, leaving the zombie in memory
+          // forever (only fixable by restarting the entire container).
+          this.logger.warn(
+            `[ZOMBIE-CLEANUP] logout failed for "${instanceName}" (likely zombie socket): ${logoutError?.toString?.() || logoutError}. Proceeding with cleanup.`,
+          );
+        }
       }
 
       try {
