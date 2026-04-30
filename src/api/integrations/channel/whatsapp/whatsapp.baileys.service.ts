@@ -1017,15 +1017,18 @@ export class BaileysStartupService extends ChannelStartupService {
       syncType?: proto.HistorySync.HistorySyncType;
     }) => {
       try {
+        const shouldTrackHistorySync = progress !== undefined && this.isSyncNotificationFromUsedSyncType(syncType);
         const normalizedProgress = progress ?? -1;
 
-        if (normalizedProgress <= this.historySyncLastProgress) {
+        if (shouldTrackHistorySync && normalizedProgress <= this.historySyncLastProgress) {
           this.historySyncMessageCount = 0;
           this.historySyncChatCount = 0;
           this.historySyncContactCount = 0;
         }
 
-        this.historySyncLastProgress = normalizedProgress;
+        if (shouldTrackHistorySync) {
+          this.historySyncLastProgress = normalizedProgress;
+        }
 
         if (syncType === proto.HistorySync.HistorySyncType.ON_DEMAND) {
           console.log('received on-demand history sync, messages=', messages);
@@ -1121,7 +1124,9 @@ export class BaileysStartupService extends ChannelStartupService {
           await this.prismaRepository.chat.createMany({ data: chatsToCreateMany, skipDuplicates: true });
         }
 
-        this.historySyncChatCount += chatsRaw.length;
+        if (shouldTrackHistorySync) {
+          this.historySyncChatCount += chatsRaw.length;
+        }
 
         this.sendDataWebhook(Events.CHATS_SET, chatsRaw);
 
@@ -1176,7 +1181,9 @@ export class BaileysStartupService extends ChannelStartupService {
           messagesRaw.push(this.prepareMessage(m));
         }
 
-        this.historySyncMessageCount += messagesRaw.length;
+        if (shouldTrackHistorySync) {
+          this.historySyncMessageCount += messagesRaw.length;
+        }
 
         if (this.configService.get<Database>('DATABASE').SAVE_DATA.HISTORIC) {
           await this.prismaRepository.message.createMany({ data: messagesRaw, skipDuplicates: true });
@@ -1200,14 +1207,17 @@ export class BaileysStartupService extends ChannelStartupService {
         }
 
         const filteredContacts = contacts.filter((c) => !!c.notify || !!c.name);
-        this.historySyncContactCount += filteredContacts.length;
+        if (shouldTrackHistorySync) {
+          this.historySyncContactCount += filteredContacts.length;
+        }
 
-        if (normalizedProgress === 100) {
+        if (shouldTrackHistorySync && normalizedProgress === 100) {
           this.sendDataWebhook(Events.MESSAGING_HISTORY_SET, {
             messageCount: this.historySyncMessageCount,
             chatCount: this.historySyncChatCount,
             contactCount: this.historySyncContactCount,
             progress: normalizedProgress,
+            syncType,
           });
 
           this.historySyncMessageCount = 0;
@@ -2214,7 +2224,7 @@ export class BaileysStartupService extends ChannelStartupService {
       this.configService.get<Chatwoot>('CHATWOOT').ENABLED &&
       this.localChatwoot?.enabled &&
       this.localChatwoot.importMessages &&
-      this.isSyncNotificationFromUsedSyncType(msg)
+      this.isSyncNotificationFromUsedSyncType(msg?.syncType)
     ) {
       if (msg.chunkOrder === 1) {
         this.chatwootService.startImportHistoryMessages(instance);
@@ -2230,10 +2240,12 @@ export class BaileysStartupService extends ChannelStartupService {
     return true;
   }
 
-  private isSyncNotificationFromUsedSyncType(msg: proto.Message.IHistorySyncNotification) {
+  private isSyncNotificationFromUsedSyncType(
+    syncType?: proto.HistorySync.HistorySyncType | proto.Message.HistorySyncType,
+  ) {
     return (
-      (this.localSettings.syncFullHistory && msg?.syncType === 2) ||
-      (!this.localSettings.syncFullHistory && msg?.syncType === 3)
+      (this.localSettings.syncFullHistory && syncType === proto.HistorySync.HistorySyncType.FULL) ||
+      (!this.localSettings.syncFullHistory && syncType === proto.HistorySync.HistorySyncType.RECENT)
     );
   }
 
