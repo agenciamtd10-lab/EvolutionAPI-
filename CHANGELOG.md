@@ -1,3 +1,109 @@
+# 2.4.0 (2026-05-06)
+
+### ⚠️ BREAKING CHANGE — License activation is now required
+
+Starting with v2.4.0, every Evolution API instance must be activated against the
+Evolution Foundation licensing server before serving API traffic. Until activation,
+all business endpoints return:
+
+```
+HTTP 503 Service Unavailable
+{
+  "error": "service not activated",
+  "code": "LICENSE_REQUIRED",
+  "register_url": "https://<your-host>/manager/login",
+  "instance_id": "<uuid>",
+  "docs_url": "https://docs.evolutionfoundation.com.br/licensing",
+  "message": "..."
+}
+```
+
+The following routes always remain public so the operator can recover:
+`/license/status`, `/license/register`, `/license/activate`, `/manager/**`,
+`/health`, `/server/ok`, `/ws`, static assets.
+
+### Migration guide
+
+1. Pull the new version and install dependencies:
+   ```bash
+   git pull
+   npm install
+   ```
+
+2. Apply the new migration (creates the `RuntimeConfig` table). Required:
+   ```bash
+   npm run db:deploy
+   ```
+   If you skip this step, the server now fails fast with a clear error
+   asking you to run `db:deploy`.
+
+3. Start the service. There are three activation paths:
+
+   - **Already have a valid licensing key?** Set it as `AUTHENTICATION_API_KEY`
+     in your `.env` and restart. The bootstrap step will validate the key with
+     the licensing server, persist it, and activate the instance automatically.
+
+   - **First-time activation via the manager UI?** Open
+     `https://<your-host>/manager/login`. The manager detects that the
+     instance is unlicensed and redirects you to the registration page on
+     the licensing server. After you complete the form, you are sent back
+     to `/manager/license/callback?code=...`, the manager exchanges the code,
+     and the dashboard becomes accessible.
+
+   - **Calling the API from code (n8n, Make, custom scripts) without a valid
+     license?** Every request will receive `503 LICENSE_REQUIRED` with the
+     `register_url` field pointing to the manager. Open it in a browser to
+     activate.
+
+### Added
+
+- **Licensing module** under `src/licensing/` — RuntimeContext, gate middleware,
+  signed/unsigned HTTP transport, hardware-based instance ID, fire-and-forget
+  heartbeat (every 30 min), graceful shutdown deactivation.
+- **Public license endpoints**:
+  - `GET /license/status` — current activation state and (masked) api_key
+  - `GET /license/register?redirect_uri=` — initiates registration on the
+    licensing server, returns `register_url`
+  - `GET /license/activate?code=` — exchanges the authorization code received
+    on the callback for a real api_key, persists it, marks the runtime active.
+- **New Prisma model** `RuntimeConfig` (key/value rows in `RuntimeConfig` table)
+  for both PostgreSQL and MySQL schemas.
+- **Auto-detect missing migration**: if the `RuntimeConfig` table is absent,
+  the server prints a clear banner explaining `npm run db:deploy` and exits 1
+  instead of throwing a stack trace from the Prisma client.
+- **Manager v2** ships with the new license-aware login flow that recognises
+  HTTP 503 / `LICENSE_REQUIRED`, calls `/license/register`, and redirects to
+  the registration server. After the callback, it lands on
+  `/manager/license/callback?code=...` and finalises activation. The new
+  manager bundle is included under `manager/dist/`.
+
+### Notes
+
+- `AUTHENTICATION_API_KEY` keeps its original meaning (global API key for
+  business endpoints) **and** gains a second use as the bootstrap license
+  key. If the value you have is a real licensing key, activation is silent.
+  If it is not, the service starts unlicensed and waits for activation via
+  the manager.
+- Activation is a one-time operation. The `api_key` is stored in the database
+  and reused across restarts. The licensing server is only consulted again
+  for periodic heartbeats (telemetry — non-blocking) and on graceful shutdown
+  (`/v1/deactivate`).
+- If the licensing server is unreachable but the instance has been activated
+  before, the service continues to serve traffic normally — local DB is the
+  source of truth for activation state after the first successful call.
+
+### Troubleshooting
+
+- **`HTTP 503 LICENSE_REQUIRED`** — expected before activation. Follow the
+  migration guide.
+- **`The table evolution_api.RuntimeConfig does not exist`** (legacy stack
+  trace if you somehow bypass the new auto-detect) — run `npm run db:deploy`.
+- **`Global API key not accepted by licensing server: invalid signature`** —
+  your existing `AUTHENTICATION_API_KEY` is not a valid licensing key. Use
+  the manager UI flow to obtain a new one.
+
+---
+
 # 2.3.7 (2025-12-05)
 
 ### Features

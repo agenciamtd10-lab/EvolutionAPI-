@@ -122,7 +122,23 @@ export async function initializeRuntime(opts: InitializeOptions = {}): Promise<R
   const rc = new RuntimeContext(globalApiKey, tier, version);
 
   // Step 1: Instance ID (hardware-based, persistent across restarts).
-  rc.instanceId = await loadOrCreateInstanceID();
+  try {
+    rc.instanceId = await loadOrCreateInstanceID();
+  } catch (err) {
+    if ((err as { code?: string })?.code === 'P2021') {
+      // Prisma error P2021 = "table does not exist" — almost always means
+      // the operator skipped `npm run db:deploy` after upgrading.
+      logger.error('╔══════════════════════════════════════════════════════════╗');
+      logger.error('║          Database is missing the licensing table          ║');
+      logger.error('╚══════════════════════════════════════════════════════════╝');
+      logger.error('The RuntimeConfig table was not found in the database.');
+      logger.error('Run the migration and restart:');
+      logger.error('  npm run db:deploy');
+      logger.error(`Docs: ${DOCS_URL}`);
+      process.exit(1);
+    }
+    throw err;
+  }
 
   // Step 2: Try loading existing license from DB.
   const stored = await loadRuntimeData();
@@ -160,7 +176,7 @@ export async function initializeRuntime(opts: InitializeOptions = {}): Promise<R
       logger.debug(`Global API key not accepted by licensing server: ${readErrorMessage(err)}`);
     }
   } else {
-    printRegistrationBanner();
+    printRegistrationBanner(rc);
     rc.setActive(false);
   }
 
@@ -168,13 +184,23 @@ export async function initializeRuntime(opts: InitializeOptions = {}): Promise<R
   return rc;
 }
 
-function printRegistrationBanner(): void {
+const DOCS_URL = 'https://docs.evolutionfoundation.com.br/licensing';
+
+function printRegistrationBanner(rc?: RuntimeContext): void {
   logger.warn('╔══════════════════════════════════════════════════════════╗');
   logger.warn('║              License Registration Required               ║');
   logger.warn('╚══════════════════════════════════════════════════════════╝');
-  logger.warn('Server starting without license.');
-  logger.warn('API endpoints will return 503 until license is activated.');
-  logger.warn('Use GET /license/register to get the registration URL.');
+  logger.warn('This Evolution API instance is not activated yet.');
+  logger.warn('API endpoints will return HTTP 503 until activation.');
+  logger.warn('');
+  logger.warn('To activate:');
+  logger.warn('  1. Open the manager at /manager/login on this host');
+  logger.warn('  2. Or set AUTHENTICATION_API_KEY in your .env with a valid licensing key');
+  logger.warn(`  3. Docs: ${DOCS_URL}`);
+  if (rc?.instanceId) {
+    logger.warn('');
+    logger.warn(`Instance ID: ${rc.instanceId}`);
+  }
 }
 
 function maskKey(key: string): string {
@@ -229,7 +255,9 @@ export function gateMiddleware(rc: RuntimeContext) {
         error: 'service not activated',
         code: 'LICENSE_REQUIRED',
         register_url: managerUrl,
-        message: 'License required. Open the manager to activate your license.',
+        instance_id: rc.instanceId,
+        docs_url: DOCS_URL,
+        message: `This Evolution API instance is not activated. Open ${managerUrl} to activate, or set AUTHENTICATION_API_KEY in your .env with a valid licensing key. Docs: ${DOCS_URL}`,
       });
     }
 
