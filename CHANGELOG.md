@@ -91,6 +91,12 @@ The following routes always remain public so the operator can recover:
 - If the licensing server is unreachable but the instance has been activated
   before, the service continues to serve traffic normally — local DB is the
   source of truth for activation state after the first successful call.
+- Release builds bake the licensing endpoint into the bundle as an XOR-encoded
+  string via tsup `define`, so the URL never appears as a plain literal in
+  `dist/main.js`. Generate the pair with `node tools/encode-url.js <url>` and
+  pass `LICENSE_ENDPOINT_ENCODED` / `LICENSE_ENDPOINT_XOR_KEY` as Docker
+  build-args (NOT runtime env vars). Local dev builds use a parts-array
+  fallback that still avoids a single string literal but is not obfuscated.
 
 ### Troubleshooting
 

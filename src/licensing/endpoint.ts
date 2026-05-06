@@ -1,9 +1,28 @@
 // Mirrors evolution-go/pkg/core/endpoint.go
-// In release builds, set LICENSE_ENDPOINT_ENCODED + LICENSE_ENDPOINT_XOR_KEY (hex).
-// In dev, the URL is reconstructed from a parts array — same technique as the Go version.
+//
+// The licensing URL is **build-time only** — it gets baked into the bundle by
+// tsup's `define` so the operator cannot point the running service at a
+// different licensing server via env vars.
+//
+// In release builds the Dockerfile passes:
+//   LICENSE_ENDPOINT_ENCODED=<hex>   (XOR-encoded URL)
+//   LICENSE_ENDPOINT_XOR_KEY=<hex>   (XOR key)
+//
+// Use `node tools/encode-url.js https://license.evolutionfoundation.com.br`
+// to generate the pair.
+//
+// In dev (vars empty), the URL is reconstructed from a parts array — same
+// technique as evolution-go.
 
-const encodedEP = process.env.LICENSE_ENDPOINT_ENCODED ?? '';
-const xorKey = process.env.LICENSE_ENDPOINT_XOR_KEY ?? '';
+// These two identifiers are replaced at bundle time by tsup `define`.
+// Do NOT inline them or read them from process.env — see tsup.config.ts.
+declare const __LICENSE_ENDPOINT_ENCODED__: string;
+declare const __LICENSE_ENDPOINT_XOR_KEY__: string;
+
+const encodedEP =
+  typeof __LICENSE_ENDPOINT_ENCODED__ === 'string' ? __LICENSE_ENDPOINT_ENCODED__ : '';
+const xorKey =
+  typeof __LICENSE_ENDPOINT_XOR_KEY__ === 'string' ? __LICENSE_ENDPOINT_XOR_KEY__ : '';
 
 export function resolveEndpoint(): string {
   if (encodedEP && xorKey) {
