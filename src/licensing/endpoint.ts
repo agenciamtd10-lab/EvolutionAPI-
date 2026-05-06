@@ -19,10 +19,8 @@
 declare const __LICENSE_ENDPOINT_ENCODED__: string;
 declare const __LICENSE_ENDPOINT_XOR_KEY__: string;
 
-const encodedEP =
-  typeof __LICENSE_ENDPOINT_ENCODED__ === 'string' ? __LICENSE_ENDPOINT_ENCODED__ : '';
-const xorKey =
-  typeof __LICENSE_ENDPOINT_XOR_KEY__ === 'string' ? __LICENSE_ENDPOINT_XOR_KEY__ : '';
+const encodedEP = typeof __LICENSE_ENDPOINT_ENCODED__ === 'string' ? __LICENSE_ENDPOINT_ENCODED__ : '';
+const xorKey = typeof __LICENSE_ENDPOINT_XOR_KEY__ === 'string' ? __LICENSE_ENDPOINT_XOR_KEY__ : '';
 
 export function resolveEndpoint(): string {
   if (encodedEP && xorKey) {
