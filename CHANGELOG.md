@@ -57,9 +57,50 @@ The following routes always remain public so the operator can recover:
 
 ### Added
 
+#### Manager v2 — completely redesigned dashboard
+
+The embedded manager (served at `/manager`) was rebuilt from the ground up
+on **Tailwind v4** + the new **`@evoapi/design-system`**, using the same
+visual language as the rest of the Evolution Foundation product line.
+Every screen was refactored — no surface remains untouched.
+
+Highlights:
+
+- **Modern dashboard** with skeleton loading, illustrated empty state,
+  and a typed-name confirmation modal for instance deletion (no more
+  accidental clicks).
+- **Dual-provider support**: the manager now talks to either
+  `evolution-api` or `evolution-go` (selected at login, persisted in
+  localStorage). When connected to a GO backend, the sidebar/router
+  automatically hide the modules GO does not implement.
+- **Sessions panels** for the seven chatbot integrations (OpenAI, Dify,
+  N8N, EvoAI, EvolutionBot, Flowise, Typebot) gained advanced filters
+  (name / number / status / time presets + custom),
+  bulk-status-change actions, client-side pagination, and a real
+  send-message modal calling `/message/sendText`.
+- **License-aware login** — see the *Licensing* section below for the
+  details.
+- **🧪 Test Interactive** modal on each instance card — a 5-tab
+  payload editor (Reply / CTA / PIX / List / Carousel) for
+  smoke-testing the new interactive-message endpoints from the
+  dashboard. Replaces the legacy stand-alone `test-interactive.js`
+  vanilla script that used to be injected into `index.html`.
+- **Full i18n coverage** in **pt-BR / en-US / es-ES / fr-FR** — every
+  screen, every toast, every modal.
+- **Branding refresh** — sidebar/footer/login point to
+  `docs.evolutionfoundation.com.br`, GitHub links to
+  `evolution-foundation/evolution-manager-v2`, contact to
+  `suporte@evofoundation.com.br`.
+
+The new bundle is shipped pre-built under `manager/dist/`. The manager
+source repository moved to `evolution-foundation/evolution-manager-v2`
+(private) — the previous in-repo submodule was dropped.
+
+#### Licensing
 - **Licensing module** under `src/licensing/` — RuntimeContext, gate middleware,
   signed/unsigned HTTP transport, hardware-based instance ID, fire-and-forget
-  heartbeat (every 30 min), graceful shutdown deactivation.
+  heartbeat (every 30 min), graceful shutdown deactivation. Mirrors the
+  evolution-go `pkg/core/` reference implementation.
 - **Public license endpoints**:
   - `GET /license/status` — current activation state and (masked) api_key
   - `GET /license/register?redirect_uri=` — initiates registration on the
@@ -76,6 +117,97 @@ The following routes always remain public so the operator can recover:
   the registration server. After the callback, it lands on
   `/manager/license/callback?code=...` and finalises activation. The new
   manager bundle is included under `manager/dist/`.
+
+#### Interactive Messages (Buttons / List / CTA / PIX / Carousel)
+- **New endpoint `POST /message/sendCarousel/{instance}`** — multi-card
+  product carousel built on top of `interactiveMessage` + `carouselMessage`.
+  Single-card-without-image falls back to `nativeFlowMessage` for iOS
+  compatibility. New DTO `SendCarouselDto`, schema `carouselMessageSchema`.
+- **Button rendering fixed on WhatsApp Web/Desktop/iOS/Android** — removed the
+  `viewOnceMessage` wrapper that prevented buttons from rendering and started
+  injecting the required `<biz><interactive type=native_flow v=1>
+  <native_flow v=9 name=mixed/></interactive></biz>` node into the
+  `relayMessage` stanza via Baileys' official `additionalNodes` option.
+- **List messages fixed on WhatsApp Web/Desktop** — switched to legacy
+  `listMessage` with `SINGLE_SELECT` listType (the modern
+  `interactiveMessage + single_select` format does not render on Web/Desktop)
+  and added `<biz><list type=product_list v=2/></biz>`.
+- **Interactive buttons via `deviceSentMessage`** + corrected CTA limits
+  (max 2 CTA buttons, no mixing with reply or PIX), aligning with the
+  WhatsApp Business message contract.
+- **PIX support** for interactive button messages (`payment_info` button
+  type — exactly 1 button, isolated).
+- **Quoted product / Catalog `orderMessage`** support — handles
+  `quotedMessage.productMessage` and the catalog `orderMessage` shape,
+  including `getTypeMessage` enrichment, deduplication cache for
+  processed order IDs, and propagation through Chatwoot integration.
+- Manager UI: a `🧪 Test Interactive` button on each instance card opens
+  a modal with five tabs (Reply / CTA / PIX / List / Carousel) and an
+  editable JSON payload — useful for smoke-testing every kind of
+  interactive message without leaving the dashboard.
+
+#### History Sync
+- **New event `messaging-history.set`** emitted on sync completion, with
+  cumulative counts (chats, contacts, messages, isLatest, progress).
+  Allows downstream consumers to know exactly when a history sync has
+  finished and how much was imported.
+- Cumulative counters reset on a new sync start to avoid carry-over
+  between consecutive syncs.
+
+#### Other
+- **New endpoint `POST /chat/markMessageAsPlayed/{instance}`** — emits the
+  audio "played" receipt (PTT/VOICE), completing the read/delivered/played
+  triplet for voice messages.
+- **SQS integration** now accepts a custom `base_url` (useful for
+  LocalStack and corporate VPC endpoints).
+- **LID → phone-number mapping and caching** — translates the new
+  `@lid` identifiers WhatsApp uses for hidden-phone profiles into the
+  real `@s.whatsapp.net` JID for downstream processing, with a cache
+  to avoid redundant lookups.
+
+#### Branding / Documentation
+- README, LICENSE, NOTICE, TRADEMARKS standardised under the
+  **Evolution Foundation 2026** identity.
+- All GitHub URLs migrated from `EvolutionAPI` to `evolution-foundation`.
+- New README section "License Activation" linking to
+  <https://docs.evolutionfoundation.com.br/licensing>.
+
+### Fixed
+
+- **`mentionsEveryOne` honours `false`** — earlier the flag was always
+  applied regardless of value (#2470).
+- **`getLastMessage`**: corrected the Prisma JSON path filter so the
+  query returns the actual last message (#2495 / #2515).
+- **`markMessageAsRead`**: corrected JID filter to cover all user types
+  (regular, business, broadcast, group).
+- **List messages**: removed destructive JSON cloning that triggered
+  `this.isZero` when the message contained `Long`-typed fields (#2461).
+- **History sync race condition**: completion event is now emitted
+  *before* the contact upsert, so consumers don't observe the sync as
+  finished while contacts are still being written (#2510).
+- **Business API (Cloud)**: race condition in sender identification
+  resolved (#2493); execution order normalised; `chatwootIds`
+  correctly propagated.
+- **`/instance/logout/{instance}`** — idempotent: returns SUCCESS instead
+  of 400 when the instance is already closed, so the manager UI delete
+  flow (logout-then-delete) does not surface a misleading error.
+- **`remove.instance` event** — emitted even when logout itself fails,
+  preventing zombie instances after a partially failed delete (#2520).
+- **Chatbot session**: a closed session no longer blocks bot
+  re-activation.
+- **Docker compose**: fresh-install startup failures resolved.
+- **WhatsApp chats**: `accountLid` handling, `remoteJid` normalisation
+  and `chatsRaw` mapping cleaned up to avoid mismatched contact data
+  on first connection.
+- **Facebook ads**: `externalAdReply` context readability and fallback
+  path for missing fields.
+- **Networking**: added the `--network-family-autoselection-attempt-timeout`
+  flag in `start:prod` so IPv4/IPv6 races no longer hang the boot on
+  hosts with broken IPv6.
+- **Trailing slashes** on configuration URLs are now tolerated in all
+  HTTP clients.
+- Verbose-log fix: undefined `maxRetries` reference inside the
+  `messages.update` handler.
 
 ### Notes
 
@@ -107,6 +239,9 @@ The following routes always remain public so the operator can recover:
 - **`Global API key not accepted by licensing server: invalid signature`** —
   your existing `AUTHENTICATION_API_KEY` is not a valid licensing key. Use
   the manager UI flow to obtain a new one.
+- **Buttons/list not rendering on WhatsApp Web** — make sure you are on
+  v2.4.0+; the `<biz>` stanza node and the legacy `listMessage` payload
+  shipped with this release are required for cross-client rendering.
 
 ---
 
