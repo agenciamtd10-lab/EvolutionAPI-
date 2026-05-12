@@ -3160,7 +3160,10 @@ export class BaileysStartupService extends ChannelStartupService {
         prepareMedia[mediaType].gifPlayback = mediaMessage.gifPlayback === true || mediaMessage.gifPlayback === 'true';
 
         if (mediaMessage.gifAttribution !== undefined) {
-          prepareMedia[mediaType].gifAttribution = Number(mediaMessage.gifAttribution);
+          const gifAttribution = Number(mediaMessage.gifAttribution);
+          if (gifAttribution === 0 || gifAttribution === 1 || gifAttribution === 2) {
+            prepareMedia[mediaType].gifAttribution = gifAttribution;
+          }
         }
       }
 
