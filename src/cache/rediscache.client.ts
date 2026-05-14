@@ -18,6 +18,10 @@ class Redis {
     } else {
       this.client = createClient({
         url: this.conf.URI,
+        pingInterval: 60_000,
+        socket: {
+          keepAlive: 30_000,
+        },
       });
 
       this.client.on('connect', () => {
