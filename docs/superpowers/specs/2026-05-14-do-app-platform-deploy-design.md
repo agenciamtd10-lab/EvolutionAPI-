@@ -48,10 +48,14 @@ DO Managed Postgres     DO Managed Redis
 
 ### Two App Platform apps
 
-- `evolution-api-prod` — connects to prod Postgres + prod Redis + prod Spaces, deploys from `main`.
-- `evolution-api-staging` — connects to staging Postgres + staging Redis + staging Spaces, deploys from `staging` branch.
+Naming follows the existing CraftedAI convention (`craftedai-<service>-<env>`):
 
-Each app contains two services defined in a single committed `app.yaml`:
+- `craftedai-evolution-api-prod` — region `nyc`, VPC `craftedai-prod` (`71038d79-53ae-421f-9bbb-8bc501ddd9f0`), deploys from `main`.
+- `craftedai-evolution-api-staging` — region `nyc`, VPC `craftedai-staging` (`fa995bdd-294e-42fd-b4dc-e20133f596e5`), deploys from `staging` branch.
+
+GitHub source: `CraftedAISolutions/evolution-api`. App Platform builds the image directly from the existing `Dockerfile` — no DOCR push step. (Other CraftedAI apps push to DOCR with a PRE_DEPLOY migration job; Evolution API deviates because the Dockerfile entrypoint already runs migrations, and skipping DOCR keeps the CI footprint minimal. Can be migrated to the DOCR pattern later for consistency.)
+
+Each app contains two services defined in a single committed `.do/app.yaml`:
 
 | Service | Source | Port | Instance size | Count |
 |---------|--------|------|---------------|-------|
@@ -67,32 +71,35 @@ Sizing is intentionally minimal; revisit once real instance counts are known.
 
 ### Database strategy
 
-- **Postgres**: one shared cluster per env (existing). Create dedicated logical databases:
-  - prod cluster → `evolution_api_prod` database, `evolution_api` user with privileges on that DB only.
-  - staging cluster → `evolution_api_staging` database, same user/role pattern.
-  - `DATABASE_PROVIDER=postgresql`, `DATABASE_CONNECTION_URI` points at the env-specific DB.
-  - Migrations run on container start via `Docker/scripts/deploy_database.sh` (already the entrypoint).
-- **Redis**: existing cluster reused. Isolation by key prefix:
+Reuses existing managed clusters — all four in `nyc3`:
+
+| Env | Postgres cluster | Postgres host | Redis/Valkey cluster | Redis host |
+|-----|------------------|---------------|----------------------|------------|
+| prod | `craftedai-prod-pg` (`dc0f5397-25a0-4af9-8685-66d12ab131d5`) | `craftedai-prod-pg-do-user-37042223-0.l.db.ondigitalocean.com:25060` | `craftedai-prod-valkey` (`1f9703c1-9173-4456-8c33-74b0e96e72ed`) | `craftedai-prod-valkey-do-user-37042223-0.l.db.ondigitalocean.com:25061` |
+| staging | `crafted-ai-staging-pg` (`1c712bb8-d951-4723-83cb-806417b1abad`) | `crafted-ai-staging-pg-do-user-37042223-0.f.db.ondigitalocean.com:25060` | `craftedai-staging-redis` (`7deda25f-27b4-420a-a885-13bc7e8d1572`) | `craftedai-staging-redis-do-user-37042223-0.f.db.ondigitalocean.com:25061` |
+
+- **Postgres**: create dedicated logical databases on the existing clusters — `evolution_api` (prod cluster) and `evolution_api` (staging cluster), each with a dedicated `evolution_api` user holding privileges on its own DB only. `DATABASE_PROVIDER=postgresql`. Migrations run on container start via `Docker/scripts/deploy_database.sh` (existing entrypoint).
+- **Redis/Valkey**: existing clusters reused. Use TLS (`rediss://`, port 25061). Isolation by key prefix:
   - prod: `CACHE_REDIS_PREFIX_KEY=evo:prod:`
   - staging: `CACHE_REDIS_PREFIX_KEY=evo:staging:`
   - `CACHE_REDIS_SAVE_INSTANCES=true` so Baileys sessions live in Redis (not on ephemeral disk).
 
-The App Platform app must be added as a **trusted source** on each managed cluster.
+Each App Platform app is bound to the matching VPC and added as a **trusted source** on its env's Postgres and Redis clusters.
 
 ### Media storage (DO Spaces)
 
-One Space per env in the same region as the DB cluster:
+One Space per env in `nyc3` (same region as DBs):
 
-- `evo-media-prod`
-- `evo-media-staging`
+- `craftedai-evolution-media-prod`
+- `craftedai-evolution-media-staging`
 
 Env vars:
 
 ```
 S3_ENABLED=true
-S3_ENDPOINT=<region>.digitaloceanspaces.com
-S3_REGION=<region>
-S3_BUCKET=evo-media-<env>
+S3_ENDPOINT=nyc3.digitaloceanspaces.com
+S3_REGION=nyc3
+S3_BUCKET=craftedai-evolution-media-<env>
 S3_ACCESS_KEY=<spaces key>
 S3_SECRET_KEY=<spaces secret>
 S3_USE_SSL=true
@@ -132,18 +139,18 @@ SERVER_PORT=8080
 SERVER_URL=https://<app-default-url>
 
 DATABASE_PROVIDER=postgresql
-DATABASE_CONNECTION_URI=postgresql://evolution_api:****@<cluster-host>:25060/evolution_api_<env>?sslmode=require
+DATABASE_CONNECTION_URI=postgresql://evolution_api:****@<env-pg-host>:25060/evolution_api?sslmode=require
 DATABASE_CONNECTION_CLIENT_NAME=evolution_<env>
 
 CACHE_REDIS_ENABLED=true
-CACHE_REDIS_URI=rediss://default:****@<redis-host>:25061
+CACHE_REDIS_URI=rediss://default:****@<env-redis-host>:25061
 CACHE_REDIS_PREFIX_KEY=evo:<env>:
 CACHE_REDIS_SAVE_INSTANCES=true
 
 S3_ENABLED=true
-S3_ENDPOINT=<region>.digitaloceanspaces.com
-S3_REGION=<region>
-S3_BUCKET=evo-media-<env>
+S3_ENDPOINT=nyc3.digitaloceanspaces.com
+S3_REGION=nyc3
+S3_BUCKET=craftedai-evolution-media-<env>
 S3_ACCESS_KEY=****
 S3_SECRET_KEY=****
 S3_USE_SSL=true
@@ -156,24 +163,27 @@ DEL_INSTANCE=false
 DEL_TEMP_INSTANCES=true
 ```
 
-## What's needed from the user to execute
+## Inputs confirmed
 
-1. **DO API token** (read scope sufficient for planning; read/write to apply via `doctl`).
-2. **Existing cluster identifiers**: prod + staging Postgres cluster IDs, prod + staging Redis cluster IDs, regions.
-3. **GitHub repo URL and branch mapping** (`main` → prod, `staging` → staging — confirm).
-4. **Spaces region** (default: match DB region).
+- DO API token: provided (rotate after deploy completes — exposed in chat).
+- Postgres clusters: `craftedai-prod-pg`, `crafted-ai-staging-pg` (both `nyc3`).
+- Redis/Valkey clusters: `craftedai-prod-valkey`, `craftedai-staging-redis` (both `nyc3`).
+- GitHub repo: `CraftedAISolutions/evolution-api`. Branch mapping: `main` → prod, `staging` → staging (`staging` branch must be created; see implementation outline).
+- Spaces region: `nyc3`.
 
 ## Implementation outline (for the plan phase)
 
-1. Add `.do/app.yaml` to repo (parameterized for both envs).
-2. Provision DO Spaces buckets + Spaces access keys.
-3. Create `evolution_api_prod` and `evolution_api_staging` databases + DB users on existing Postgres clusters.
-4. Add the future App Platform apps to trusted sources on the DB and Redis clusters (done after first deploy when the app's outbound IPs are known, or via "App Platform" trusted source category).
-5. Create staging app first via `doctl apps create --spec .do/app.yaml` with staging env vars.
-6. Verify migrations ran, `GET /` returns 200, create a test WhatsApp instance, confirm reconnect-from-Redis works after a manual restart.
-7. Create prod app the same way once staging passes.
-8. Distribute prod/staging `AUTHENTICATION_API_KEY` to the consuming APIs.
-9. Document the deploy + rollback procedure in `Docker/` or a top-level `DEPLOYMENT.md`.
+1. Create `staging` branch on the GitHub repo (currently only `main` exists per `gitStatus`).
+2. Add `.do/app.staging.yaml` and `.do/app.prod.yaml` (or a single template + per-env values) to the repo.
+3. On each existing Postgres cluster, create the `evolution_api` database and a dedicated `evolution_api` user/role with privileges scoped to that DB only.
+4. Provision the two DO Spaces buckets in `nyc3` and create one Spaces access key per env.
+5. Create the **staging** app first via `doctl apps create --spec .do/app.staging.yaml` with secrets attached.
+6. Add the staging app as a trusted source on `crafted-ai-staging-pg` and `craftedai-staging-redis`.
+7. Verify: migrations ran, `GET /` returns 200, create a test WhatsApp instance, confirm reconnect-from-Redis after a manual app restart, confirm media upload to Spaces.
+8. Create the **prod** app the same way; add it as trusted source on `craftedai-prod-pg` and `craftedai-prod-valkey`.
+9. Distribute prod + staging `AUTHENTICATION_API_KEY` to the consuming APIs (CraftedAI core-api, etc.) via their secret stores.
+10. Add a top-level `DEPLOYMENT.md` documenting deploy + rollback (App Platform "Roll back to previous deployment" + how to re-add trusted sources if a cluster is rebuilt).
+11. Rotate the DO API token used during this work.
 
 ## Risks & mitigations
 
