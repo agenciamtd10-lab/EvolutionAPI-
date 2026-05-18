@@ -16,6 +16,7 @@ import { Events, wa } from '@api/types/wa.types';
 import { AudioConverter, Chatwoot, ConfigService, Openai, S3 } from '@config/env.config';
 import { BadRequestException, InternalServerErrorException } from '@exceptions';
 import { createJid } from '@utils/createJid';
+import { normalizeFileName } from '@utils/normalizeSendMessageOptions';
 import { sendTelemetry } from '@utils/sendTelemetry';
 import axios from 'axios';
 import { isBase64, isURL } from 'class-validator';
@@ -607,11 +608,7 @@ export class EvolutionStartupService extends ChannelStartupService {
   }
 
   public async mediaMessage(data: SendMediaDto, file?: any, isIntegration = false) {
-    const mediaData: SendMediaDto = {
-      ...data,
-      // Normalize filename to fileName (handle case-insensitivity)
-      fileName: data.fileName || (data as any).filename,
-    };
+    const mediaData: SendMediaDto = normalizeFileName({ ...data });
 
     if (file) mediaData.media = file.buffer.toString('base64');
 

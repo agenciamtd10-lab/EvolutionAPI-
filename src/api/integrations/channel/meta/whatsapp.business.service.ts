@@ -23,6 +23,7 @@ import { Events, wa } from '@api/types/wa.types';
 import { AudioConverter, Chatwoot, ConfigService, Database, Openai, S3, WaBusiness } from '@config/env.config';
 import { BadRequestException, InternalServerErrorException } from '@exceptions';
 import { createJid } from '@utils/createJid';
+import { normalizeFileName } from '@utils/normalizeSendMessageOptions';
 import { status } from '@utils/renderStatus';
 import { sendTelemetry } from '@utils/sendTelemetry';
 import axios from 'axios';
@@ -1284,11 +1285,7 @@ export class BusinessStartupService extends ChannelStartupService {
   }
 
   public async mediaMessage(data: SendMediaDto, file?: any, isIntegration = false) {
-    const mediaData: SendMediaDto = {
-      ...data,
-      // Normalize filename to fileName (handle case-insensitivity)
-      fileName: data.fileName || (data as any).filename,
-    };
+    const mediaData: SendMediaDto = normalizeFileName({ ...data });
 
     if (file) mediaData.media = file.buffer.toString('base64');
 
