@@ -3845,8 +3845,12 @@ export class BaileysStartupService extends ChannelStartupService {
         throw 'Message not found';
       }
 
+      if (!msg.message) {
+        throw 'Message not found';
+      }
+
       for (const subtype of MessageSubtype) {
-        if (msg.message[subtype]) {
+        if (msg.message[subtype]?.message) {
           msg.message = msg.message[subtype].message;
         }
       }
