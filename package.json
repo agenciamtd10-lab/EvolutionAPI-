@@ -48,9 +48,7 @@
   },
   "contributors": [
     {
-      "name": "Davidson Gomes",
-      "email": "contato@evolution-api.com",
-      "url": "https://github.com/EvolutionAPI/evolution-api"
+      "name": "Davidson Gomes"
     }
   ],
   "license": "Apache-2.0",

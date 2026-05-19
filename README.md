@@ -2,17 +2,8 @@
 
 <div align="center">
 
-[![Docker Image](https://img.shields.io/badge/Docker-image-blue)](https://hub.docker.com/r/evoapicloud/evolution-api)
-[![Whatsapp Group](https://img.shields.io/badge/Group-WhatsApp-%2322BC18)](https://evolution-api.com/whatsapp)
-[![Discord Community](https://img.shields.io/badge/Discord-Community-blue)](https://evolution-api.com/discord)
-[![Postman Collection](https://img.shields.io/badge/Postman-Collection-orange)](https://evolution-api.com/postman) 
-[![Documentation](https://img.shields.io/badge/Documentation-Official-green)](https://doc.evolution-api.com)
-[![Feature Requests](https://img.shields.io/badge/Feature-Requests-purple)](https://evolutionapi.canny.io/feature-requests)
-[![Roadmap](https://img.shields.io/badge/Roadmap-Community-blue)](https://evolutionapi.canny.io/feature-requests)
-[![Changelog](https://img.shields.io/badge/Changelog-Updates-green)](https://evolutionapi.canny.io/changelog)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
-[![Support](https://img.shields.io/badge/Donation-picpay-green)](https://app.picpay.com/user/davidsongomes1998)
-[![Sponsors](https://img.shields.io/badge/Github-sponsor-orange)](https://github.com/sponsors/EvolutionAPI)
+[![Fork](https://img.shields.io/badge/Fork-jeandgardany%2Fevolution--api-blue)](https://github.com/jeandgardany/evolution-api)
 
 </div>
   
@@ -24,8 +15,9 @@ Evolution API began as a WhatsApp controller API based on [CodeChat](https://git
 
 Today, Evolution API is not limited to WhatsApp. It integrates with various platforms such as Typebot, Chatwoot, Dify, and OpenAI, offering a broad array of functionalities beyond messaging. Evolution API supports both the Baileys-based WhatsApp API and the official WhatsApp Business API, with upcoming support for Instagram and Messenger.
 
-## Looking for a Lightweight Version?
-For those who need a more streamlined and performance-optimized version, check out [Evolution API Lite](https://github.com/EvolutionAPI/evolution-api-lite). It's designed specifically for microservices, focusing solely on connectivity without integrations or audio conversion features. Ideal for environments that prioritize simplicity and efficiency.
+## Fork Notice
+
+This repository is a self-maintained fork of [EvolutionAPI/evolution-api](https://github.com/EvolutionAPI/evolution-api), continued after upstream development stopped (last upstream release: v2.3.7, December 2025). Maintained by Jean Lima.
 
 ## Types of Connections
 
@@ -73,39 +65,15 @@ Evolution API supports various integrations to enhance its functionality. Below 
 - Amazon S3 / Minio:
   - Store media files received in [Amazon S3](https://aws.amazon.com/pt/s3/) or [Minio](https://min.io/).
 
-## Community & Feedback
+## Support
 
-We value community input and feedback to continuously improve Evolution API:
-
-### 🚀 Feature Requests & Roadmap
-- **[Feature Requests](https://evolutionapi.canny.io/feature-requests)**: Submit new feature ideas and vote on community proposals
-- **[Roadmap](https://evolutionapi.canny.io/feature-requests)**: View planned features and development progress
-- **[Changelog](https://evolutionapi.canny.io/changelog)**: Stay updated with the latest releases and improvements
-
-### 💬 Community Support
-- **[WhatsApp Group](https://evolution-api.com/whatsapp)**: Join our community for support and discussions
-- **[Discord Community](https://evolution-api.com/discord)**: Real-time chat with developers and users
-- **[GitHub Issues](https://github.com/EvolutionAPI/evolution-api/issues)**: Report bugs and technical issues
-
-### 🔒 Security
+- **[GitHub Issues](https://github.com/jeandgardany/evolution-api/issues)**: Report bugs and technical issues
 - **[Security Policy](./SECURITY.md)**: Guidelines for reporting security vulnerabilities
-- **Security Contact**: contato@evolution-api.com
+- **Security Contact**: jeandgardany@hotmail.com
 
 ## Telemetry Notice
 
-To continuously improve our services, we have implemented telemetry that collects data on the routes used, the most accessed routes, and the version of the API in use. We would like to assure you that no sensitive or personal data is collected during this process. The telemetry helps us identify improvements and provide a better experience for users.
-
-## Evolution Support Premium
-
-Join our Evolution Pro community for expert support and a weekly call to answer questions. Visit the link below to learn more and subscribe:
-
-[Click here to learn more](https://evolution-api.com/suporte-pro)
-
-# Donate to the project.
-
-#### Github Sponsors
-
-https://github.com/sponsors/EvolutionAPI
+Telemetry is disabled by default in this fork. If `TELEMETRY_ENABLED=true` and `TELEMETRY_URL` is set in your environment, only the requested route, API version, and timestamp are sent to the configured URL — no payload, no personal data. Leave `TELEMETRY_URL` empty to keep telemetry off.
 
 # Content Creator Partners
 
@@ -137,8 +105,8 @@ Evolution API is licensed under the Apache License 2.0, with the following addit
 
 2. **Usage Notification Requirement**: If Evolution API is used as part of any project, including closed-source systems (e.g., proprietary software), the user is required to display a clear notification within the system that Evolution API is being utilized. This notification should be visible to system administrators and accessible from the system's documentation or settings page. Failure to comply with this requirement may result in the necessity for a commercial license, as determined by the producer.
 
-Please contact contato@evolution-api.com to inquire about licensing matters.
+Please contact jeandgardany@hotmail.com to inquire about licensing matters.
 
 Apart from the specific conditions mentioned above, all other rights and restrictions follow the Apache License 2.0. Detailed information about the Apache License 2.0 can be found at [http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0).
 
-© 2025 Evolution API
+© 2025 Evolution API contributors — fork maintained by Jean Lima

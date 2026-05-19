@@ -21,7 +21,7 @@ We take security vulnerabilities seriously. If you discover a security vulnerabi
 
 Instead, please report security vulnerabilities via email to:
 
-**📧 contato@evolution-api.com**
+**📧 jeandgardany@hotmail.com**
 
 ### 📋 What to Include
 
@@ -92,7 +92,7 @@ Security updates will be:
 
 For any questions about this security policy, please contact:
 
-- **Email**: contato@evolution-api.com
+- **Email**: jeandgardany@hotmail.com
 
 ---
 

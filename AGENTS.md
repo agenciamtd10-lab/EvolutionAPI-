@@ -317,7 +317,7 @@ export DATABASE_PROVIDER=postgresql  # or mysql
 
 ### Vulnerability Reporting
 - See `SECURITY.md` for security vulnerability reporting process
-- Contact: `contato@evolution-api.com`
+- Contact: `jeandgardany@hotmail.com`
 
 ## Communication Standards
 
