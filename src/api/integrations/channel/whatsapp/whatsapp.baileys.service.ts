@@ -58,7 +58,16 @@ import { PrismaRepository } from '@api/repository/repository.service';
 import { chatbotController, waMonitor } from '@api/server.module';
 import { CacheService } from '@api/services/cache.service';
 import { ChannelStartupService } from '@api/services/channel.service';
-import { Events, LidContact, LidMessageKey, MessageSubtype, resolveLidContact, resolveLidJid, TypeMediaMessage, wa } from '@api/types/wa.types';
+import {
+  Events,
+  LidContact,
+  LidMessageKey,
+  MessageSubtype,
+  resolveLidContact,
+  resolveLidJid,
+  TypeMediaMessage,
+  wa,
+} from '@api/types/wa.types';
 import { CacheEngine } from '@cache/cacheengine';
 import {
   CacheConf,
@@ -105,7 +114,8 @@ import makeWASocket, {
   isJidBroadcast,
   isJidGroup,
   isJidNewsletter,
-  isJidUser,
+  isLidUser,
+  isPnUser,
   makeCacheableSignalKeyStore,
   MessageUpsertType,
   MessageUserReceiptUpdate,
@@ -271,7 +281,7 @@ export class BaileysStartupService extends ChannelStartupService {
   public async getProfileStatus() {
     const status = await this.client.fetchStatus(this.instance.wuid);
 
-    return status?.status;
+    return (status as any)?.[0]?.status;
   }
 
   public get profilePictureUrl() {
@@ -451,7 +461,7 @@ export class BaileysStartupService extends ChannelStartupService {
       try {
         const profilePic = await this.profilePicture(this.instance.wuid);
         this.instance.profilePictureUrl = profilePic.profilePictureUrl;
-      } catch (error) {
+      } catch {
         this.instance.profilePictureUrl = null;
       }
       const formattedWuid = this.instance.wuid.split('@')[0].padEnd(30, ' ');
@@ -525,7 +535,7 @@ export class BaileysStartupService extends ChannelStartupService {
       }
 
       return webMessageInfo[0].message;
-    } catch (error) {
+    } catch {
       return { conversation: '' };
     }
   }
@@ -600,7 +610,7 @@ export class BaileysStartupService extends ChannelStartupService {
             agent: makeProxyAgent(proxyUrl),
             fetchAgent: makeProxyAgent(proxyUrl),
           };
-        } catch (error) {
+        } catch {
           this.localProxy.enabled = false;
         }
       } else {
@@ -1224,7 +1234,6 @@ export class BaileysStartupService extends ChannelStartupService {
               messageRaw.message.speechToText = await this.openaiService.speechToText(
                 openAiDefaultSettings.OpenaiCreds,
                 received,
-                this.client.updateMediaMessage,
               );
             }
           }
@@ -1538,8 +1547,9 @@ export class BaileysStartupService extends ChannelStartupService {
 
     'group-participants.update': (participantsUpdate: {
       id: string;
-      participants: string[];
+      participants: string[] | any[];
       action: ParticipantAction;
+      author?: string;
     }) => {
       this.sendDataWebhook(Events.GROUP_PARTICIPANTS_UPDATE, participantsUpdate);
 
@@ -1799,7 +1809,7 @@ export class BaileysStartupService extends ChannelStartupService {
         wuid: jid,
         profilePictureUrl,
       };
-    } catch (error) {
+    } catch {
       return {
         wuid: jid,
         profilePictureUrl: null,
@@ -1813,9 +1823,9 @@ export class BaileysStartupService extends ChannelStartupService {
     try {
       return {
         wuid: jid,
-        status: (await this.client.fetchStatus(jid))?.status,
+        status: ((await this.client.fetchStatus(jid)) as any)?.[0]?.status,
       };
-    } catch (error) {
+    } catch {
       return {
         wuid: jid,
         status: null,
@@ -1867,7 +1877,7 @@ export class BaileysStartupService extends ChannelStartupService {
           website: business?.website?.shift(),
         };
       }
-    } catch (error) {
+    } catch {
       return {
         wuid: jid,
         name: null,
@@ -1883,8 +1893,8 @@ export class BaileysStartupService extends ChannelStartupService {
     const jid = createJid(number);
 
     try {
-      const call = await this.client.offerCall(jid, isVideo);
-      setTimeout(() => this.client.terminateCall(call.id, call.to), callDuration * 1000);
+      const call = await (this.client as any).offerCall(jid, isVideo);
+      setTimeout(() => (this.client as any).terminateCall(call.id, call.to), callDuration * 1000);
 
       return call;
     } catch (error) {
@@ -1932,7 +1942,7 @@ export class BaileysStartupService extends ChannelStartupService {
       m.key = {
         id: id,
         remoteJid: sender,
-        participant: isJidUser(sender) ? sender : undefined,
+        participant: isPnUser(sender) || isLidUser(sender) ? sender : undefined,
         fromMe: true,
       };
       for (const [key, value] of Object.entries(m)) {
@@ -2126,7 +2136,7 @@ export class BaileysStartupService extends ChannelStartupService {
         const msg = m?.message ? m : ((await this.getMessage(m.key, true)) as proto.IWebMessageInfo);
 
         if (msg) {
-          quoted = msg;
+          quoted = msg as WAMessage;
         }
       }
 
@@ -2139,7 +2149,7 @@ export class BaileysStartupService extends ChannelStartupService {
           const cache = this.configService.get<CacheConf>('CACHE');
           if (!cache.REDIS.ENABLED && !cache.LOCAL.ENABLED) group = await this.findGroup({ groupJid: sender }, 'inner');
           else group = await this.getGroupMetadataCache(sender);
-        } catch (error) {
+        } catch {
           throw new NotFoundException('Group not found');
         }
 
@@ -2211,7 +2221,6 @@ export class BaileysStartupService extends ChannelStartupService {
           messageRaw.message.speechToText = await this.openaiService.speechToText(
             openAiDefaultSettings.OpenaiCreds,
             messageRaw,
-            this.client.updateMediaMessage,
           );
         }
       }
@@ -2582,7 +2591,7 @@ export class BaileysStartupService extends ChannelStartupService {
 
           const response = await axios.get(mediaMessage.media, config);
 
-          mimetype = response.headers['content-type'];
+          mimetype = response.headers['content-type'] as string;
         }
       }
 
@@ -3396,7 +3405,7 @@ export class BaileysStartupService extends ChannelStartupService {
     try {
       const keys: proto.IMessageKey[] = [];
       data.readMessages.forEach((read) => {
-        if (isJidGroup(read.remoteJid) || isJidUser(read.remoteJid)) {
+        if (isJidGroup(read.remoteJid) || isPnUser(read.remoteJid) || isLidUser(read.remoteJid)) {
           keys.push({
             remoteJid: read.remoteJid,
             fromMe: read.fromMe,
@@ -4131,7 +4140,7 @@ export class BaileysStartupService extends ChannelStartupService {
   public async inviteInfo(id: GroupInvite) {
     try {
       return await this.client.groupGetInviteInfo(id.inviteCode);
-    } catch (error) {
+    } catch {
       throw new NotFoundException('No invite info', id.inviteCode);
     }
   }
@@ -4156,7 +4165,7 @@ export class BaileysStartupService extends ChannelStartupService {
       }
 
       return { send: true, inviteUrl };
-    } catch (error) {
+    } catch {
       throw new NotFoundException('No send invite');
     }
   }

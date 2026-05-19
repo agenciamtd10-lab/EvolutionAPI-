@@ -312,7 +312,7 @@ export type Webhook = {
   };
 };
 export type Pusher = { ENABLED: boolean; GLOBAL?: GlobalPusher; EVENTS: EventsPusher };
-export type ConfigSessionPhone = { CLIENT: string; NAME: string };
+export type ConfigSessionPhone = { CLIENT: string; NAME: string; VERSION?: string };
 export type QrCode = { LIMIT: number; COLOR: string };
 export type Typebot = { ENABLED: boolean; API_VERSION: string; SEND_MEDIA_BASE64: boolean };
 export type Chatwoot = {

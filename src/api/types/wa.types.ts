@@ -16,6 +16,16 @@ export interface LidContact extends Contact {
   lidJidAlt?: string;
 }
 
+/**
+ * Extended message key interface for LID addressing support in integrations.
+ * Adds `addressingMode` and `participantAlt` on top of `LidMessageKey`
+ * to enable proper LID → standard JID resolution in services like Chatwoot.
+ */
+export interface ExtendedIMessageKey extends LidMessageKey {
+  addressingMode?: 'lid' | string;
+  participantAlt?: string;
+}
+
 export enum Events {
   APPLICATION_STARTUP = 'application.startup',
   INSTANCE_CREATE = 'instance.create',
@@ -68,6 +78,7 @@ export declare namespace wa {
     wuid?: string;
     profileName?: string;
     profilePictureUrl?: string;
+    ownerJid?: string;
     token?: string;
     number?: string;
     integration?: string;
@@ -99,6 +110,7 @@ export declare namespace wa {
     readMessages?: boolean;
     readStatus?: boolean;
     syncFullHistory?: boolean;
+    wavoipToken?: string;
   };
 
   export type LocalEvent = {
@@ -147,19 +159,22 @@ export declare namespace wa {
 
 /** Resolve a @lid JID to its @s.whatsapp.net alternative when available. */
 export function resolveLidJid(key: LidMessageKey): string {
-  return key.remoteJid?.includes('@lid') && key.remoteJidAlt
-    ? key.remoteJidAlt
-    : key.remoteJid;
+  return key.remoteJid?.includes('@lid') && key.remoteJidAlt ? key.remoteJidAlt : key.remoteJid;
 }
 
 /** Resolve a @lid contact ID to its @s.whatsapp.net alternative when available. */
 export function resolveLidContact(contact: LidContact): string {
-  return contact.id?.includes('@lid') && contact.lidJidAlt
-    ? contact.lidJidAlt
-    : contact.id;
+  return contact.id?.includes('@lid') && contact.lidJidAlt ? contact.lidJidAlt : contact.id;
 }
 
-export const TypeMediaMessage = ['imageMessage', 'documentMessage', 'audioMessage', 'videoMessage', 'stickerMessage', 'ptvMessage'];
+export const TypeMediaMessage = [
+  'imageMessage',
+  'documentMessage',
+  'audioMessage',
+  'videoMessage',
+  'stickerMessage',
+  'ptvMessage',
+];
 
 export const MessageSubtype = [
   'ephemeralMessage',

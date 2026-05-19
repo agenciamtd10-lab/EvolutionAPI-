@@ -6,7 +6,7 @@ import { chatwootImport } from '@api/integrations/chatbot/chatwoot/utils/chatwoo
 import { PrismaRepository } from '@api/repository/repository.service';
 import { CacheService } from '@api/services/cache.service';
 import { WAMonitoringService } from '@api/services/monitor.service';
-import { Events } from '@api/types/wa.types';
+import { Events, ExtendedIMessageKey } from '@api/types/wa.types';
 import { Chatwoot, ConfigService, Database, HttpServer } from '@config/env.config';
 import { Logger } from '@config/logger.config';
 import ChatwootClient, {
@@ -24,7 +24,6 @@ import i18next from '@utils/i18n';
 import { sendTelemetry } from '@utils/sendTelemetry';
 import axios from 'axios';
 import { WAMessageContent, WAMessageKey } from 'baileys';
-import { ExtendedIMessageKey } from '../../channel/whatsapp/whatsapp.baileys.service';
 import dayjs from 'dayjs';
 import FormData from 'form-data';
 import { Jimp, JimpMime } from 'jimp';
@@ -1210,7 +1209,7 @@ export class ChatwootService {
         const response = await axios.get(media, {
           responseType: 'arraybuffer',
         });
-        mimeType = response.headers['content-type'];
+        mimeType = response.headers['content-type'] as string;
       }
 
       let type = 'document';
@@ -2220,7 +2219,7 @@ export class ChatwootService {
         if (isAdsMessage) {
           const imgBuffer = await axios.get(adsMessage.thumbnailUrl, { responseType: 'arraybuffer' });
 
-          const extension = mimeTypes.extension(imgBuffer.headers['content-type']);
+          const extension = mimeTypes.extension(imgBuffer.headers['content-type'] as string);
           const mimeType = extension && mimeTypes.lookup(extension);
 
           if (!mimeType) {
