@@ -24,7 +24,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/EvolutionAPI/evolution-api.git"
+    "url": "git+https://github.com/jeandgardany/evolution-api.git"
   },
   "keywords": [
     "chat",
@@ -43,14 +43,21 @@
     "bot"
   ],
   "author": {
-    "name": "Davidson Gomes",
-    "email": "contato@evolution-api.com"
+    "name": "Jean Lima",
+    "email": "jeandgardany@hotmail.com"
   },
+  "contributors": [
+    {
+      "name": "Davidson Gomes",
+      "email": "contato@evolution-api.com",
+      "url": "https://github.com/EvolutionAPI/evolution-api"
+    }
+  ],
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/EvolutionAPI/evolution-api/issues"
+    "url": "https://github.com/jeandgardany/evolution-api/issues"
   },
-  "homepage": "https://github.com/EvolutionAPI/evolution-api#readme",
+  "homepage": "https://github.com/jeandgardany/evolution-api#readme",
   "lint-staged": {
     "src/**/*.{ts,js}": [
       "eslint --fix"
@@ -63,6 +70,9 @@
     "commitizen": {
       "path": "cz-conventional-changelog"
     }
+  },
+  "overrides": {
+    "protobufjs": "^7.6.0"
   },
   "dependencies": {
     "@adiwajshing/keyed-db": "^0.2.4",

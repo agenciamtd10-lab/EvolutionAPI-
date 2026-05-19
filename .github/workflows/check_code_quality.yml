@@ -31,7 +31,14 @@ jobs:
 
     - name: Install packages
       run: npm ci
-    
+
+    # Fails CI only on CRITICAL CVEs. High/moderate are surfaced in logs but
+    # do not block the build — most remaining items are pinned by Baileys and
+    # resolve only when Baileys upgrades. Tighten to --audit-level=high after
+    # next major Baileys upgrade.
+    - name: Security audit
+      run: npm audit --audit-level=critical --omit=dev
+
     - name: Check linting
       run: npm run lint:check
 
