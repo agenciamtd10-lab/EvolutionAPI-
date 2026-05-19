@@ -1,17 +1,17 @@
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 RUN apk update && \
     apk add git ffmpeg wget curl bash
 
-LABEL version="2.2.0" description="Api to control whatsapp features through http requests." 
-LABEL maintainer="Davidson Gomes" git="https://github.com/DavidsonGomes"
-LABEL contact="contato@atendai.com"
+LABEL version="2.3.7" description="Api to control whatsapp features through http requests."
+LABEL maintainer="Jean Lima" git="https://github.com/jeandgardany"
+LABEL contact="jeandgardany@hotmail.com"
 
 WORKDIR /evolution
 
-COPY ./package.json ./tsconfig.json ./
+COPY ./package.json ./package-lock.json ./tsconfig.json ./
 
-RUN npm install -f
+RUN npm ci --silent --ignore-scripts
 
 COPY ./src ./src
 COPY ./public ./public
@@ -29,7 +29,7 @@ RUN ./Docker/scripts/generate_database.sh
 
 RUN ./node_modules/.bin/tsup
 
-FROM node:20-alpine AS final
+FROM node:24-alpine AS final
 
 RUN apk update && \
     apk add tzdata ffmpeg bash openssl openssl-dev libc6-compat
